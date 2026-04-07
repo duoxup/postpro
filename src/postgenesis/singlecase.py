@@ -29,7 +29,7 @@ colmr = ColumnMetaRegistry.from_json(os.path.join(prj_dir, 'gcmr_2.json'))
 
 def zoverview(fname):
     gmr = MainResults(fname)
-    npics = 5
+    npics = 4
     fig, axes = xtils.new_subplots(n_subplots=npics,
                                    mode='vertical',
                                    base_size=(6, 1.8),
@@ -45,11 +45,11 @@ def zoverview(fname):
     axes[0].set_ylabel('$Pulse length$ [ps]')
     axes[0].legend()
 
-    axes[1].plot(gmr.zplot, gmr.zenergy*1e6) #[uJ]
+    axes[1].plot(gmr.zplot, gmr.zenergy*1e6, label='linear') #[uJ]
     # axes[1].set_yscale('log')
     axes[1].set_ylabel('Pluse energy [$\\mu$J]')
     ax1t = axes[1].twinx()
-    ax1t.plot(gmr.zplot, gmr.zenergy*1e6, '--') #[uJ]
+    ax1t.plot(gmr.zplot, gmr.zenergy*1e6, '--', label='logarithmic') #[uJ]
     ax1t.set_yscale('log')
 
     axes[2].plot(gmr.zplot, gmr.par_g_xsize*1e3) #[mm]
@@ -62,10 +62,10 @@ def zoverview(fname):
     axes[3].set_ylabel('$\\sigma_{x, field}$ or $\\sigma_{y, field}$ [mm]')
     axes[3].legend(['x', 'y'])
 
-    axes[4].plot(gmr.zplot, gmr.fld_g_xdivergence)
-    axes[4].plot(gmr.zplot, gmr.fld_g_xdivergence)
-    axes[4].set_ylabel('Field divergence [rad]')
-    axes[4].legend(['x', 'y'])
+    # axes[4].plot(gmr.zplot, gmr.fld_g_xdivergence)
+    # axes[4].plot(gmr.zplot, gmr.fld_g_xdivergence)
+    # axes[4].set_ylabel('Field divergence [rad]')
+    # axes[4].legend(['x', 'y'])
 
     axes[-1].set_xlabel('z [m]')
 

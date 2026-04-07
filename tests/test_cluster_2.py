@@ -15,10 +15,10 @@ if __name__ == '__main__':
     from multiprocessing import Pool
     
     
-    cdir = Path('/lustre/fs25/group/pitz/duoxup/THz_ideal_machine/genesis/cluster00000003/')
+    cdir = Path('/lustre/fs25/group/pitz/duoxup/THz_ideal_machine/genesis/cluster00000009/')
     pool = Pool(processes=8)
     
-    stat_dicts = cluster_statistics(cdir, zs=[0.13*3, 0.13*5], pool=None, version=2)
+    stat_dicts = cluster_statistics(cdir, zs=[0.13*3, 0.13*5, 0.13*10], ratios2max=[1, 0.9, 0.8, 0.5, 0.3], pool=None, version=2)
     df = stat_dict_to_dataframe(stat_dicts)
     df.to_csv(cdir / '001.g4.000.out.h5.csv', index=False)
     

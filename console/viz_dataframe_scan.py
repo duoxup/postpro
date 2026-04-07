@@ -23,7 +23,7 @@ mpl.rcParams['axes.prop_cycle'] = cycler(color=plt.get_cmap('tab10').colors) * c
 figsize_base = (6, 4)
 plt.rcParams['figure.figsize'] = figsize_base
 
-cluster_folder = r'/lustre/fs25/group/pitz/duoxup/THzSuperRad/genesis/cluster00000201/'
+cluster_folder = r'/lustre/fs25/group/pitz/duoxup/THzSuperRad/genesis/cluster00000195/'
 fname =  '001.g4.000.out.h5.csv'
 
 dfb = pd.read_csv(os.path.join(cluster_folder,fname))
@@ -32,28 +32,28 @@ df['index'] = df.index
 
 # dfc = df[df['sig_x']<0.4]
 # dfc = df[df['Q_total']==-1000]
-# dfc = df[df['cor_Ekin']==0]
-dfc = df
+dfc = df[df['cor_Ekin'].isin([-200, -100, 0, 100, 200])]
+# dfc = df
 dfc['Q_total'] = np.abs(df['Q_total'])
 meta_plot = ColumnMetaRegistry.from_json(r'/afs/ifh.de/group/pitz/data/duoxup/sim1/pyS/colmeta_4.json')
 psc = PlotScanConfig(ncols=5, meta=meta_plot,
                      sharex='col',
-                     # sharey='row',
+                     sharey='row',
                      # sharex=False,
-                     sharey=False,
+                     # sharey=False,
                      )
 
 fig, axes = plot_scan_facets(df=dfc,
                              x='I_peak',
-                             # y='max_energy',
+                             y='max_energy',
                              # y='fwhm@80%_max_energy',
-                             y='fwhm@0.39m',
+                             # y='fwhm@0.39m',
                              # y='energy@0.39m',
                              # y='sigma_t@80%_max_energy',
                              # y='sigma_t@0.11m',  # 'max_energy'  'sigma_t@90%_max_energy'
                              hue='beta_x_scale_from_opt',
                              # hue='sig_x',
-                             facet_vars=['Q_total', 'Freq'],
+                             facet_vars=['Q_total', 'cor_Ekin'],
                              config=psc,
                              mode='line',
                              colorbar='each',
