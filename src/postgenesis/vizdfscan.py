@@ -479,13 +479,12 @@ def plot_scan_facets(
         sub = df.loc[:, facet_vars_]
         if dropna:
             sub = sub.dropna()
-        combos: List[Tuple[Any, ...]] = []
-        seen = set()
-        for row in sub.itertuples(index=False, name=None):
-            if row not in seen:
-                combos.append(row)
-                seen.add(row)
-        return combos
+        unique_df = sub.drop_duplicates()
+        try:
+            unique_df = unique_df.sort_values(by=list(facet_vars_))
+        except TypeError:
+            pass  # mixed types fall back to encounter order
+        return [tuple(row) for row in unique_df.itertuples(index=False, name=None)]
 
     def _subset_by_facet(
         facet_vars_: Sequence[str],
