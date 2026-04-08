@@ -5,23 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "postgenesis"
 version = "0.1.0"
-description = "Post-processing for Genesis"
-readme = "README.md"
+description = "Post-processing and visualization toolkit for Genesis FEL simulation results"
 requires-python = ">=3.10"
 authors = [{ name = "duoxup" }]
 dependencies = [
-  "numpy",
-  "scipy",
-  "matplotlib",
-  "imageio>=2.28",
-  "tqdm",
-  "pandas",
-  "h5py",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pandas",
+    "h5py",
+    "tqdm",
+    # Private dependencies (install separately):
+    #   dstrux
+    #   xtils
 ]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "black", "ipykernel"]
-viz = ["matplotlib", "imageio"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
