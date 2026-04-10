@@ -18,6 +18,8 @@ import numpy as np
 from xtils import get_autoscale
 
 import matplotlib.pyplot as plt
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 from math import ceil
 
 Formatter = Callable[[Any], str]
@@ -36,7 +38,6 @@ def _json_friendly_number(x: Any) -> Any:
     """
     Convert numpy / pandas scalar-ish numbers to Python built-ins for JSON.
     """
-    # pandas / numpy scalars usually have .item()
     if hasattr(x, "item") and callable(getattr(x, "item")):
         try:
             return x.item()
@@ -98,16 +99,14 @@ class ColumnMeta:
         if self.unit:
             s += self.unit
         return s
-    
+
     def to_dict(self, *, include_formatter: bool = False) -> Dict[str, Any]:
         d = asdict(self)
 
-        # Normalize empty strings to None for compactness/consistency
         for k in ("axis_label", "alias", "unit", "fmt"):
             if isinstance(d.get(k), str) and d[k].strip() == "":
                 d[k] = None
 
-        # Make numeric fields JSON-friendly
         d["scale"] = float(_json_friendly_number(d.get("scale", 1.0)))
         d["offset"] = float(_json_friendly_number(d.get("offset", 0.0)))
         if d.get("digits_show", None) is not None:
@@ -116,10 +115,7 @@ class ColumnMeta:
             except Exception:
                 d["digits_show"] = None
 
-        # Formatter handling
         if include_formatter:
-            # You may choose to store a string identifier here instead,
-            # but storing arbitrary callables in JSON is not reliable.
             raise TypeError(
                 "ColumnMeta.formatter is not JSON-serializable. "
                 "Store formatting via (scale/offset/digits_show/fmt) or inject formatter at runtime."
@@ -130,19 +126,16 @@ class ColumnMeta:
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any]) -> ColumnMeta:
-        # Forward-compatible: ignore unknown keys
         allowed = {
             "name", "axis_label", "alias", "unit", "scale", "offset",
             "digits_show", "fmt", "formatter"
         }
         clean: Dict[str, Any] = {k: d[k] for k in d.keys() if k in allowed}
 
-        # Normalize empty strings
         for k in ("axis_label", "alias", "unit", "fmt"):
             if isinstance(clean.get(k), str) and clean[k].strip() == "":
                 clean[k] = None
 
-        # Enforce numeric types
         if "scale" in clean and clean["scale"] is not None:
             clean["scale"] = float(clean["scale"])
         if "offset" in clean and clean["offset"] is not None:
@@ -150,7 +143,6 @@ class ColumnMeta:
         if "digits_show" in clean and clean["digits_show"] is not None:
             clean["digits_show"] = int(clean["digits_show"])
 
-        # formatter is expected to be None when loaded from JSON
         clean["formatter"] = None
 
         if "name" not in clean or not isinstance(clean["name"], str) or not clean["name"].strip():
@@ -237,7 +229,7 @@ class ColumnMetaRegistry:
             json.dump(payload, f, indent=indent, ensure_ascii=ensure_ascii)
 
     @classmethod
-    def from_json(self, path_or_fp: Union[PathLike, IO[str]]) -> ColumnMetaRegistry:
+    def from_json(cls, path_or_fp: Union[PathLike, IO[str]]) -> ColumnMetaRegistry:
         if hasattr(path_or_fp, "read"):
             data = json.load(path_or_fp)
             return ColumnMetaRegistry.from_dict(data)
@@ -246,7 +238,6 @@ class ColumnMetaRegistry:
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
         return ColumnMetaRegistry.from_dict(data)
-
 
 
 # ----------------------------
@@ -264,132 +255,34 @@ class PlotScanConfig:
     # data handling
     sort_x: bool = True
     agg: Optional[AggFunc] = None            # handle duplicate x points
-    dropna_facets: bool = False             # drop NA rows when forming facet combos
+    dropna_facets: bool = False              # drop NA rows when forming facet combos
     apply_meta_transform_to_data: bool = True  # scale x/y plotted values by meta
 
     # labeling overrides (if None, use meta/col)
     xlabel: Optional[str] = None
     ylabel: Optional[str] = None
+    label_prefer_alias: bool = False         # prefer alias over axis_label in axis labels
 
     # titles
     title_vars: Optional[Sequence[str]] = None  # default: facet_vars
     title_sep: str = ", "
+    title_show_keys: bool = True             # show "key=value"; False shows value only
 
-    # legend
+    # legend (line mode)
     legend: bool = True
     legend_loc: str = "best"
 
-    # hue ordering
+    # hue ordering (line mode)
     hue_order: Optional[Sequence[Any]] = None
+
+    # contour mode options
+    contour_levels: Optional[int] = None     # number of contour levels; None -> auto (10)
+    contour_filled: bool = True              # True: contourf, False: contour lines only
+    contour_labels: bool = False             # annotate contour lines with clabel
 
     # metadata
     meta: Optional[ColumnMetaRegistry] = None
 
-
-def _ensure_columns_exist(df: pd.DataFrame, cols: Sequence[Optional[str]]) -> None:
-    cols2 = [c for c in cols if c]
-    missing = [c for c in cols2 if c not in df.columns]
-    if missing:
-        raise KeyError(f"DataFrame is missing columns: {missing}")
-
-
-def _unique_facet_combinations(
-    df: pd.DataFrame,
-    facet_vars: Sequence[str],
-    dropna: bool,
-) -> List[Tuple[Any, ...]]:
-    if not facet_vars:
-        return [tuple()]
-
-    sub = df.loc[:, facet_vars]
-    if dropna:
-        sub = sub.dropna()
-
-    # preserve encounter order
-    combos: List[Tuple[Any, ...]] = []
-    seen = set()
-    for row in sub.itertuples(index=False, name=None):
-        if row not in seen:
-            combos.append(row)
-            seen.add(row)
-    return combos
-
-
-def _subset_by_facet(
-    df: pd.DataFrame,
-    facet_vars: Sequence[str],
-    facet_values: Tuple[Any, ...],
-) -> pd.DataFrame:
-    if not facet_vars:
-        return df
-
-    mask = pd.Series(True, index=df.index)
-    for vname, vval in zip(facet_vars, facet_values):
-        if _is_na(vval):
-            mask &= df[vname].isna()
-        else:
-            mask &= (df[vname] == vval)
-    return df.loc[mask]
-
-
-def _apply_transform_series(meta: ColumnMeta, s: pd.Series) -> pd.Series:
-    # vectorized numeric transform; non-numeric series will fall back to original values
-    if pd.api.types.is_numeric_dtype(s):
-        return s.astype(float) * meta.scale + meta.offset
-    return s
-
-
-def _prepare_xy(
-    d: pd.DataFrame,
-    x: str,
-    y: str,
-    sort_x: bool,
-    agg: Optional[AggFunc],
-) -> Tuple[pd.Series, pd.Series]:
-    dx = d[[x, y]].dropna()
-    if dx.empty:
-        return pd.Series(dtype=float), pd.Series(dtype=float)
-
-    if agg is None:
-        if sort_x:
-            dx = dx.sort_values(by=x)
-        return dx[x], dx[y]
-
-    # aggregate y by x
-    grouped = dx.groupby(x, sort=sort_x)[y]
-    if isinstance(agg, str):
-        ys = getattr(grouped, agg)()
-    else:
-        ys = grouped.apply(agg)
-
-    xs = pd.Series(ys.index, name=x)
-    ys = pd.Series(ys.values, name=y)
-    return xs, ys
-
-
-def _axis_label(col: str, cfg: PlotScanConfig) -> str:
-    if cfg.meta is None:
-        return col
-    return cfg.meta.get(col).axis_text()
-
-
-def _legend_title(col: str, cfg: PlotScanConfig) -> str:
-    if cfg.meta is None:
-        return col
-    return cfg.meta.get(col).legend_title()
-
-
-def _legend_item_label(col: str, value: Any, cfg: PlotScanConfig) -> str:
-    if cfg.meta is None:
-        return str(value)
-    return cfg.meta.get(col).format_value(value)
-
-
-def _title_kv(col: str, value: Any, cfg: PlotScanConfig) -> str:
-    if cfg.meta is None:
-        return f"{col}={value}"
-    m = cfg.meta.get(col)
-    return f"{m.title_key()}={m.format_value(value)}"
 
 def _meta_key(col: str) -> str:
     # e.g. "sig_x@z=0.5" -> "sig_x"
@@ -415,6 +308,7 @@ def make_registry(spec: Mapping[str, Mapping[str, Any]]) -> ColumnMetaRegistry:
         reg.add(ColumnMeta(name=col, **cfg))
     return reg
 
+
 def plot_scan_facets(
     df: pd.DataFrame,
     *,
@@ -422,10 +316,10 @@ def plot_scan_facets(
     y: str,
     hue: Optional[str] = None,
     facet_vars: Optional[Sequence[str]] = None,
-    config: "PlotScanConfig" = None,
-    mode: str = "line",               # "line" or "heatmap"
-    colorbar: str = "each",           # "each" | "row" | "col" | "all" (heatmap only)
-    cmap: Optional[str] = None,       # matplotlib colormap name, default None -> matplotlib default
+    config: PlotScanConfig = None,
+    mode: str = "line",               # "line", "heatmap", or "contour"
+    colorbar: str = "each",           # "each" | "row" | "col" | "all" (heatmap/contour only)
+    cmap: Optional[str] = None,
     no_autoscale: Optional[Sequence[str]] = None,
 ) -> Tuple[plt.Figure, np.ndarray]:
     """
@@ -435,22 +329,23 @@ def plot_scan_facets(
     ----------
     df : pd.DataFrame
     x, y : str
-        In line mode: x-axis variable and y-axis variable.
-        In heatmap mode: x-axis variable and z-axis variable (color) respectively.
+        In line mode: x-axis and y-axis variables.
+        In heatmap/contour mode: x-axis variable and z-axis (color) variable respectively.
     hue : str | None
         In line mode: grouping variable (one line per hue value).
-        In heatmap mode: becomes the y-axis variable of the heatmap grid.
-        Required in heatmap mode.
+        In heatmap/contour mode: y-axis variable of the 2-D grid. Required.
     facet_vars : Sequence[str] | None
         Variables used to create facets (one subplot per unique combination).
     config : PlotScanConfig
-        Must be provided; uses its fields unchanged.
+        Must be provided.
     mode : str
-        "line" or "heatmap".
+        "line", "heatmap", or "contour".
     colorbar : str
-        Heatmap colorbar sharing strategy: "each", "row", "col", "all".
+        Colorbar sharing for heatmap/contour: "each", "row", "col", or "all".
     cmap : str | None
         Colormap name. If None, matplotlib default is used.
+    no_autoscale : Sequence[str] | None
+        Column names that should not be auto-scaled.
 
     Returns
     -------
@@ -461,9 +356,9 @@ def plot_scan_facets(
 
     facet_vars = list(facet_vars or [])
 
-    # ----------------------------
-    # Helpers (local; do not modify your classes)
-    # ----------------------------
+    # ------------------------------------------------------------------ #
+    # Local helpers
+    # ------------------------------------------------------------------ #
     def _ensure_columns_exist(cols: Sequence[Optional[str]]) -> None:
         cols2 = [c for c in cols if c]
         missing = [c for c in cols2 if c not in df.columns]
@@ -483,7 +378,7 @@ def plot_scan_facets(
         try:
             unique_df = unique_df.sort_values(by=list(facet_vars_))
         except TypeError:
-            pass  # mixed types fall back to encounter order
+            pass
         return [tuple(row) for row in unique_df.itertuples(index=False, name=None)]
 
     def _subset_by_facet(
@@ -500,10 +395,7 @@ def plot_scan_facets(
                 mask &= (df[vname] == vval)
         return df.loc[mask]
 
-    def _is_numeric_series(s: pd.Series) -> bool:
-        return pd.api.types.is_numeric_dtype(s)
-
-    def _meta(col: str) -> "ColumnMeta":
+    def _meta(col: str) -> ColumnMeta:
         key = _meta_key(col)
         if config.meta is None:
             return ColumnMeta(name=key)
@@ -511,23 +403,18 @@ def plot_scan_facets(
 
     def _axis_label(col: str, prefix: str = "") -> str:
         m = _meta(col)
-        base = m.axis_label or m.alias or m.name
+        if config.label_prefer_alias:
+            base = m.alias or m.axis_label or m.name
+        else:
+            base = m.axis_label or m.alias or m.name
         if m.unit:
             return f"{base} [{prefix}{m.unit}]"
         return base
 
     def _format_value(col: str, value: Any, scale: float, prefix: str) -> str:
-        """
-        Format a scalar using ColumnMeta.digits_show/fmt, and apply autoscale (value*scale, prefix+unit).
-        For non-numeric values, return str(value) and ignore scale/prefix.
-        """
         m = _meta(col)
-
-        # Non-numeric / NA handling
         if value is None or (isinstance(value, float) and np.isnan(value)) or pd.isna(value):
             return "NaN"
-
-        # Try numeric formatting
         try:
             v = float(value) * scale
             if m.fmt is not None:
@@ -540,379 +427,321 @@ def plot_scan_facets(
                 s += f"{prefix}{m.unit}"
             return s
         except Exception:
-            # Fallback for categorical/string-like
             return str(value)
 
     def _title_kv(col: str, value: Any, scale: float, prefix: str) -> str:
-        m = _meta(col)
-        key = m.alias or m.name
-        return f"{key}={_format_value(col, value, scale, prefix)}"
+        val_str = _format_value(col, value, scale, prefix)
+        if config.title_show_keys:
+            m = _meta(col)
+            return f"{m.alias or m.name}={val_str}"
+        return val_str
 
-    def _prepare_xy(
-        d: pd.DataFrame,
-        xcol: str,
-        ycol: str,
-        sort_x: bool,
-        agg: Optional[Union[str, Any]],
-    ) -> Tuple[pd.Series, pd.Series]:
+    def _prepare_xy(d: pd.DataFrame, xcol: str, ycol: str) -> Tuple[pd.Series, pd.Series]:
         dx = d[[xcol, ycol]].dropna()
         if dx.empty:
             return pd.Series(dtype=float), pd.Series(dtype=float)
-
-        if agg is None:
-            if sort_x:
+        if config.agg is None:
+            if config.sort_x:
                 dx = dx.sort_values(by=xcol)
             return dx[xcol], dx[ycol]
-
-        grouped = dx.groupby(xcol, sort=sort_x)[ycol]
-        if isinstance(agg, str):
-            ys = getattr(grouped, agg)()
+        grouped = dx.groupby(xcol, sort=config.sort_x)[ycol]
+        if isinstance(config.agg, str):
+            ys = getattr(grouped, config.agg)()
         else:
-            ys = grouped.apply(agg)
+            ys = grouped.apply(config.agg)
+        return pd.Series(ys.index, name=xcol), pd.Series(ys.values, name=ycol)
 
-        xs = pd.Series(ys.index, name=xcol)
-        ys = pd.Series(ys.values, name=ycol)
-        return xs, ys
-
-    # ----------------------------
+    # ------------------------------------------------------------------ #
     # Validate inputs
-    # ----------------------------
+    # ------------------------------------------------------------------ #
     mode = str(mode).lower()
-    if mode not in {"line", "heatmap"}:
-        raise ValueError(f"mode must be 'line' or 'heatmap', got: {mode}")
+    if mode not in {"line", "heatmap", "contour"}:
+        raise ValueError(f"mode must be 'line', 'heatmap', or 'contour', got: {mode}")
 
-    if mode == "heatmap":
+    if mode in {"heatmap", "contour"}:
         if hue is None:
-            raise ValueError("In heatmap mode, 'hue' is required (it becomes the heatmap y-axis).")
+            raise ValueError(f"In {mode} mode, 'hue' is required (it becomes the y-axis).")
         colorbar = str(colorbar).lower()
         if colorbar not in {"each", "row", "col", "all"}:
             raise ValueError(f"colorbar must be one of each/row/col/all, got: {colorbar}")
 
     _ensure_columns_exist([x, y, hue, *facet_vars])
 
-    # ----------------------------
-    # Global autoscale (uniform across all facets)
-    # ----------------------------
-    # We use autoscale only for numeric series; otherwise (1.0, "").
+    # ------------------------------------------------------------------ #
+    # Global autoscale
+    # ------------------------------------------------------------------ #
     autoscale_map: Dict[str, Tuple[float, str]] = {}
-
     no_autoscale_set = set(no_autoscale or [])
     no_autoscale_key_set = {_meta_key(c) for c in no_autoscale_set}
+
     def _get_global_scale(col: str) -> Tuple[float, str]:
         if col in autoscale_map:
             return autoscale_map[col]
-    
-        # User-specified: do not autoscale these columns
         key = _meta_key(col)
         if (col in no_autoscale_set) or (key in no_autoscale_key_set):
             autoscale_map[col] = (1.0, "")
             return 1.0, ""
-    
         m = _meta(col)
-    
-        # Do not autoscale if unit is missing/empty or is a.u./arb.
         u = (m.unit or "").strip()
         if (u == "") or (u.lower() in {"a.u.", "au", "a.u", "arb.", "arb", "arb. unit", "arb units"}):
             autoscale_map[col] = (1.0, "")
             return 1.0, ""
-    
         s = df[col]
-        if _is_numeric_series(s):
+        if pd.api.types.is_numeric_dtype(s):
             scale, prefix = get_autoscale(s.to_numpy())
         else:
             scale, prefix = 1.0, ""
-    
         autoscale_map[col] = (scale, prefix)
         return scale, prefix
-
-
 
     x_scale, x_prefix = _get_global_scale(x)
 
     if mode == "line":
         y_scale, y_prefix = _get_global_scale(y)
-        if hue is not None:
-            hue_scale, hue_prefix = _get_global_scale(hue)  # may be non-numeric -> (1,"")
-        else:
-            hue_scale, hue_prefix = 1.0, ""
+        hue_scale, hue_prefix = (_get_global_scale(hue) if hue is not None else (1.0, ""))
     else:
-        # heatmap: hue becomes y-axis; y becomes z(color)
-        hue_scale, hue_prefix = _get_global_scale(hue)  # y-axis of heatmap
-        z_scale, z_prefix = _get_global_scale(y)        # color axis
+        hue_scale, hue_prefix = _get_global_scale(hue)
+        z_scale, z_prefix = _get_global_scale(y)
 
-    # Title variables scaling (global)
     title_vars = list(config.title_vars) if config.title_vars is not None else facet_vars
     for tv in title_vars:
         if tv in df.columns:
             _get_global_scale(tv)
 
-    # ----------------------------
+    # ------------------------------------------------------------------ #
     # Facet layout
-    # ----------------------------
+    # ------------------------------------------------------------------ #
     combos = _unique_facet_combinations(facet_vars, dropna=config.dropna_facets)
     n = len(combos)
-
     ncols = max(1, int(config.ncols))
     nrows = max(1, int(ceil(n / ncols)))
     figsize = (config.figsize_per_ax[0] * ncols, config.figsize_per_ax[1] * nrows)
 
     fig, axes = plt.subplots(
-        nrows=nrows,
-        ncols=ncols,
-        figsize=figsize,
-        sharex=config.sharex,
-        sharey=config.sharey,
-        squeeze=False,
-        layout = 'constrained',
+        nrows=nrows, ncols=ncols, figsize=figsize,
+        sharex=config.sharex, sharey=config.sharey,
+        squeeze=False, layout="constrained",
     )
     axes_flat = axes.ravel()
 
-    # hue order for line mode
+    # Hue order (line mode)
     if mode == "line" and hue is not None:
-        if config.hue_order is not None:
-            hue_values = list(config.hue_order)
-        else:
-            hv = df[hue].dropna().tolist()
-            hue_values = list(dict.fromkeys(hv).keys())
+        hue_values: List[Any] = (
+            list(config.hue_order)
+            if config.hue_order is not None
+            else list(dict.fromkeys(df[hue].dropna().tolist()).keys())
+        )
     else:
         hue_values = [None]
 
-    # ----------------------------
-    # Heatmap pre-pass: build Z matrices and vmin/vmax pools
-    # ----------------------------
-    heatmap_cache: Dict[int, Dict[str, Any]] = {}
+    # ------------------------------------------------------------------ #
+    # Grid data pre-pass (heatmap / contour)
+    # ------------------------------------------------------------------ #
+    grid_cache: Dict[int, Dict[str, Any]] = {}
     zmin_raw_per_ax: Dict[int, float] = {}
     zmax_raw_per_ax: Dict[int, float] = {}
 
-    if mode == "heatmap":
-        # Build per-axis pivot grids and cache them
+    if mode in {"heatmap", "contour"}:
         for i, facet_values in enumerate(combos):
             dsub = _subset_by_facet(facet_vars, facet_values)
+            xs_u = np.sort(dsub[x].dropna().unique())
+            ys_u = np.sort(dsub[hue].dropna().unique())
 
-            # Regular grid assumption: use sorted unique coords
-            xs = np.sort(dsub[x].dropna().unique())
-            ys = np.sort(dsub[hue].dropna().unique())
-
-            if xs.size == 0 or ys.size == 0:
-                Z = np.full((ys.size, xs.size), np.nan, dtype=float)
+            if xs_u.size == 0 or ys_u.size == 0:
+                Z = np.full((max(ys_u.size, 0), max(xs_u.size, 0)), np.nan, dtype=float)
             else:
-                # Pivot to grid: index=hue (rows), columns=x (cols), values=y (z)
-                # Handle duplicates via agg if provided; else take mean as a safe default
                 use_agg = config.agg if config.agg is not None else "mean"
-                if isinstance(use_agg, str):
-                    pv = (
-                        dsub[[hue, x, y]]
-                        .dropna()
-                        .groupby([hue, x])[y]
-                        .agg(use_agg)
-                        .unstack(x)
-                    )
-                else:
-                    pv = (
-                        dsub[[hue, x, y]]
-                        .dropna()
-                        .groupby([hue, x])[y]
-                        .apply(use_agg)
-                        .unstack(x)
-                    )
-
-                # Reindex to full grid order
-                pv = pv.reindex(index=ys, columns=xs)
+                grp = dsub[[hue, x, y]].dropna().groupby([hue, x])[y]
+                pv = (grp.agg(use_agg) if isinstance(use_agg, str) else grp.apply(use_agg)).unstack(x)
+                pv = pv.reindex(index=ys_u, columns=xs_u)
                 Z = pv.to_numpy(dtype=float)
 
-            # Raw z-range (before autoscale)
-            if np.all(np.isnan(Z)):
-                zmin = np.nan
-                zmax = np.nan
-            else:
-                zmin = float(np.nanmin(Z))
-                zmax = float(np.nanmax(Z))
-
-            heatmap_cache[i] = {"xs": xs, "ys": ys, "Z": Z}
-            zmin_raw_per_ax[i] = zmin
-            zmax_raw_per_ax[i] = zmax
+            valid = Z[~np.isnan(Z)]
+            grid_cache[i] = {"xs": xs_u, "ys": ys_u, "Z": Z}
+            zmin_raw_per_ax[i] = float(valid.min()) if valid.size else np.nan
+            zmax_raw_per_ax[i] = float(valid.max()) if valid.size else np.nan
 
     def _group_vmin_vmax(i: int) -> Tuple[float, float]:
-        """
-        Compute vmin/vmax (raw) for this axis index i according to colorbar mode.
-        """
-        if mode != "heatmap":
-            raise RuntimeError("_group_vmin_vmax called in non-heatmap mode")
-
-        def _safe_minmax(indices: List[int]) -> Tuple[float, float]:
+        def _safe_mm(indices: List[int]) -> Tuple[float, float]:
             mins = [zmin_raw_per_ax[j] for j in indices if not np.isnan(zmin_raw_per_ax[j])]
             maxs = [zmax_raw_per_ax[j] for j in indices if not np.isnan(zmax_raw_per_ax[j])]
-            if not mins or not maxs:
-                return np.nan, np.nan
-            return float(min(mins)), float(max(maxs))
+            return (float(min(mins)), float(max(maxs))) if (mins and maxs) else (np.nan, np.nan)
 
         if colorbar == "each":
             return zmin_raw_per_ax[i], zmax_raw_per_ax[i]
-
         if colorbar == "all":
-            return _safe_minmax(list(range(n)))
-
-        row = i // ncols
-        col = i % ncols
-
+            return _safe_mm(list(range(n)))
+        row, col = i // ncols, i % ncols
         if colorbar == "row":
-            idx = [j for j in range(n) if (j // ncols) == row]
-            return _safe_minmax(idx)
+            return _safe_mm([j for j in range(n) if j // ncols == row])
+        return _safe_mm([j for j in range(n) if j % ncols == col])
 
-        if colorbar == "col":
-            idx = [j for j in range(n) if (j % ncols) == col]
-            return _safe_minmax(idx)
+    # ------------------------------------------------------------------ #
+    # Per-axis drawing functions
+    # ------------------------------------------------------------------ #
+    def _draw_line_ax(ax: plt.Axes, dsub: pd.DataFrame) -> None:
+        if hue is not None:
+            for hv in hue_values:
+                dline = dsub.loc[dsub[hue] == hv]
+                xs, ys = _prepare_xy(dline, x, y)
+                if config.apply_meta_transform_to_data:
+                    xs = xs.astype(float) * x_scale
+                    ys = ys.astype(float) * y_scale
+                ax.plot(xs.to_numpy(), ys.to_numpy(),
+                        label=_format_value(hue, hv, hue_scale, hue_prefix))
+        else:
+            xs, ys = _prepare_xy(dsub, x, y)
+            if config.apply_meta_transform_to_data:
+                xs = xs.astype(float) * x_scale
+                ys = ys.astype(float) * y_scale
+            ax.plot(xs.to_numpy(), ys.to_numpy())
 
-        raise ValueError(f"Unexpected colorbar mode: {colorbar}")
+        if hue is not None and config.legend:
+            m_hue = _meta(hue)
+            ax.legend(
+                title=m_hue.axis_label or m_hue.alias or m_hue.name,
+                loc=config.legend_loc,
+                frameon=True,
+            )
 
-    # ----------------------------
+    def _draw_heatmap_ax(ax: plt.Axes, i: int) -> Optional[Any]:
+        cache = grid_cache.get(i)
+        if cache is None:
+            ax.axis("off")
+            return None
+
+        sc_x = x_scale if config.apply_meta_transform_to_data else 1.0
+        sc_y = hue_scale if config.apply_meta_transform_to_data else 1.0
+        sc_z = z_scale if config.apply_meta_transform_to_data else 1.0
+
+        xs = cache["xs"].astype(float) * sc_x
+        ys = cache["ys"].astype(float) * sc_y
+        Z = cache["Z"].astype(float) * sc_z
+
+        vmin_r, vmax_r = _group_vmin_vmax(i)
+        vmin = vmin_r * sc_z if not np.isnan(vmin_r) else vmin_r
+        vmax = vmax_r * sc_z if not np.isnan(vmax_r) else vmax_r
+
+        return ax.pcolormesh(xs, ys, Z, shading="auto", vmin=vmin, vmax=vmax, cmap=cmap)
+
+    def _draw_contour_ax(ax: plt.Axes, i: int) -> Optional[ScalarMappable]:
+        cache = grid_cache.get(i)
+        if cache is None:
+            ax.axis("off")
+            return None
+
+        sc_x = x_scale if config.apply_meta_transform_to_data else 1.0
+        sc_y = hue_scale if config.apply_meta_transform_to_data else 1.0
+        sc_z = z_scale if config.apply_meta_transform_to_data else 1.0
+
+        xs = cache["xs"].astype(float) * sc_x
+        ys = cache["ys"].astype(float) * sc_y
+        Z = cache["Z"].astype(float) * sc_z
+
+        vmin_r, vmax_r = _group_vmin_vmax(i)
+        have_range = not (np.isnan(vmin_r) or np.isnan(vmax_r))
+        vmin = vmin_r * sc_z if have_range else None
+        vmax = vmax_r * sc_z if have_range else None
+
+        n_levels = config.contour_levels or 10
+        levels_arg: Any = np.linspace(vmin, vmax, n_levels + 1) if have_range else n_levels
+
+        if config.contour_filled:
+            cs = ax.contourf(xs, ys, Z, levels=levels_arg, cmap=cmap, extend="both")
+        else:
+            cs = ax.contour(xs, ys, Z, levels=levels_arg, cmap=cmap)
+
+        if config.contour_labels:
+            ax.clabel(cs, inline=True, fontsize=8)
+
+        sm = ScalarMappable(norm=Normalize(vmin=vmin, vmax=vmax), cmap=cmap or cs.cmap)
+        sm.set_array([])
+        return sm
+
+    def _set_ax_labels(ax: plt.Axes, i: int, x_lbl: str, y_lbl: str) -> None:
+        # When axes are shared, label only the outer edges to avoid redundancy.
+        # An axis is the "bottom" of its column if no valid plot exists below it.
+        if not config.sharex or (i + ncols >= n):
+            ax.set_xlabel(x_lbl)
+        if not config.sharey or (i % ncols == 0):
+            ax.set_ylabel(y_lbl)
+
+    # ------------------------------------------------------------------ #
     # Plot loop
-    # ----------------------------
-    mappables: Dict[int, Any] = {}  # heatmap mappables per axis index
+    # ------------------------------------------------------------------ #
+    mappables: Dict[int, Any] = {}
 
     for i, facet_values in enumerate(combos):
         ax = axes_flat[i]
         dsub = _subset_by_facet(facet_vars, facet_values)
 
-        # Titles
+        # Title
         if title_vars:
             facet_map = dict(zip(facet_vars, facet_values))
-            parts: List[str] = []
-            for tv in title_vars:
-                if tv in facet_map:
-                    sc, pr = autoscale_map.get(tv, (1.0, ""))
-                    parts.append(_title_kv(tv, facet_map[tv], sc, pr))
+            parts: List[str] = [
+                _title_kv(tv, facet_map[tv], *autoscale_map.get(tv, (1.0, "")))
+                for tv in title_vars if tv in facet_map
+            ]
             ax.set_title(config.title_sep.join(parts))
 
         if mode == "line":
-            # Plot lines
-            if hue is not None:
-                for hv in hue_values:
-                    dline = dsub.loc[dsub[hue] == hv]
-                    xs, ys = _prepare_xy(dline, x, y, sort_x=config.sort_x, agg=config.agg)
+            _draw_line_ax(ax, dsub)
+            x_lbl = config.xlabel or _axis_label(x, x_prefix)
+            y_lbl = config.ylabel or _axis_label(y, y_prefix)
+        elif mode == "heatmap":
+            pc = _draw_heatmap_ax(ax, i)
+            if pc is not None:
+                mappables[i] = pc
+            x_lbl = config.xlabel or _axis_label(x, x_prefix)
+            y_lbl = config.ylabel or _axis_label(hue, hue_prefix)
+        else:  # contour
+            sm = _draw_contour_ax(ax, i)
+            if sm is not None:
+                mappables[i] = sm
+            x_lbl = config.xlabel or _axis_label(x, x_prefix)
+            y_lbl = config.ylabel or _axis_label(hue, hue_prefix)
 
-                    # Apply autoscale to plotted values (global)
-                    if config.apply_meta_transform_to_data:
-                        xs = xs.astype(float) * x_scale
-                        ys = ys.astype(float) * y_scale
-
-                    # Legend labels: format hue values with autoscale if numeric
-                    label = _format_value(hue, hv, hue_scale, hue_prefix) if hue is not None else str(hv)
-                    ax.plot(xs.to_numpy(), ys.to_numpy(), label=label)
-            else:
-                xs, ys = _prepare_xy(dsub, x, y, sort_x=config.sort_x, agg=config.agg)
-                if config.apply_meta_transform_to_data:
-                    xs = xs.astype(float) * x_scale
-                    ys = ys.astype(float) * y_scale
-                ax.plot(xs.to_numpy(), ys.to_numpy())
-
-            # Axis labels (autoscale prefix + SI unit)
-            ax.set_xlabel(config.xlabel or _axis_label(x, x_prefix))
-            ax.set_ylabel(config.ylabel or _axis_label(y, y_prefix))
-
-            if hue is not None and config.legend:
-                ax.legend(
-                    title=_meta(hue).axis_label or _meta(hue).alias or _meta(hue).name,
-                    loc=config.legend_loc,
-                    frameon=True,
-                )
-
-        else:
-            # Heatmap: x vs hue, color = y
-            cache = heatmap_cache.get(i, None)
-            if cache is None:
-                ax.axis("off")
-                continue
-
-            xs_raw = cache["xs"]
-            ys_raw = cache["ys"]
-            Z_raw = cache["Z"]
-
-            # Apply autoscale (global)
-            xs = xs_raw.astype(float) * x_scale if config.apply_meta_transform_to_data else xs_raw.astype(float)
-            ys = ys_raw.astype(float) * hue_scale if config.apply_meta_transform_to_data else ys_raw.astype(float)
-            Z = Z_raw.astype(float) * z_scale if config.apply_meta_transform_to_data else Z_raw.astype(float)
-
-            vmin_raw, vmax_raw = _group_vmin_vmax(i)
-            vmin = (vmin_raw * z_scale) if (config.apply_meta_transform_to_data and not np.isnan(vmin_raw)) else vmin_raw
-            vmax = (vmax_raw * z_scale) if (config.apply_meta_transform_to_data and not np.isnan(vmax_raw)) else vmax_raw
-
-            # pcolormesh; shading="auto" handles center/edge ambiguity robustly
-            pc = ax.pcolormesh(xs, ys, Z, shading="auto", vmin=vmin, vmax=vmax, cmap=cmap)
-            mappables[i] = pc
-
-            ax.set_xlabel(config.xlabel or _axis_label(x, x_prefix))
-            ax.set_ylabel(config.ylabel or _axis_label(hue, hue_prefix))
+        _set_ax_labels(ax, i, x_lbl, y_lbl)
 
     # Hide unused axes
     for j in range(n, len(axes_flat)):
         axes_flat[j].axis("off")
 
-    # ----------------------------
-    # Colorbars (heatmap only)
-    # ----------------------------
-    if mode == "heatmap":
-        # Colorbar label uses z (= original y variable)
+    # ------------------------------------------------------------------ #
+    # Colorbars (heatmap / contour)
+    # ------------------------------------------------------------------ #
+    if mode in {"heatmap", "contour"}:
         cbar_label = _axis_label(y, z_prefix)
 
-        def _axes_in_row(r: int) -> List[plt.Axes]:
-            idx = [k for k in range(n) if (k // ncols) == r]
-            return [axes_flat[k] for k in idx if k in mappables]
+        def _axs_in_row(r: int) -> List[plt.Axes]:
+            return [axes_flat[k] for k in range(n) if k // ncols == r and k in mappables]
 
-        def _axes_in_col(c: int) -> List[plt.Axes]:
-            idx = [k for k in range(n) if (k % ncols) == c]
-            return [axes_flat[k] for k in idx if k in mappables]
+        def _axs_in_col(c: int) -> List[plt.Axes]:
+            return [axes_flat[k] for k in range(n) if k % ncols == c and k in mappables]
 
         if colorbar == "each":
-            for i, pc in mappables.items():
-                cb = fig.colorbar(pc, ax=axes_flat[i])
-                cb.set_label(cbar_label)
+            for i, mp in mappables.items():
+                fig.colorbar(mp, ax=axes_flat[i]).set_label(cbar_label)
 
         elif colorbar == "all":
             if mappables:
-                first_i = next(iter(mappables.keys()))
-                pc = mappables[first_i]
-                cb = fig.colorbar(pc, ax=[axes_flat[i] for i in mappables.keys()])
-                cb.set_label(cbar_label)
+                mp = mappables[next(iter(mappables))]
+                fig.colorbar(mp, ax=[axes_flat[i] for i in mappables]).set_label(cbar_label)
 
         elif colorbar == "row":
             for r in range(nrows):
-                axs = _axes_in_row(r)
+                axs = _axs_in_row(r)
                 if not axs:
                     continue
-                # pick first mappable in this row
-                idxs = [k for k in mappables.keys() if (k // ncols) == r]
-                pc = mappables[idxs[0]]
-                cb = fig.colorbar(pc, ax=axs)
-                cb.set_label(cbar_label)
+                idxs = [k for k in mappables if k // ncols == r]
+                fig.colorbar(mappables[idxs[0]], ax=axs).set_label(cbar_label)
 
         elif colorbar == "col":
             for c in range(ncols):
-                axs = _axes_in_col(c)
+                axs = _axs_in_col(c)
                 if not axs:
                     continue
-                idxs = [k for k in mappables.keys() if (k % ncols) == c]
-                pc = mappables[idxs[0]]
-                cb = fig.colorbar(pc, ax=axs)
-                cb.set_label(cbar_label)
-
-        else:
-            raise ValueError(f"Unexpected colorbar mode: {colorbar}")
+                idxs = [k for k in mappables if k % ncols == c]
+                fig.colorbar(mappables[idxs[0]], ax=axs).set_label(cbar_label)
 
     return fig, axes
-
-if __name__ == '__main__':
-    meta_plot = ColumnMetaRegistry.from_json(r'/afs/ifh.de/group/pitz/data/duoxup/sim1/pyS/colmeta_4.json')
-    new_entry_1 = ColumnMeta(name='Freq',
-                             axis_label='Frequency',
-                             alias=None,
-                             unit='THz',
-                             scale=1.,
-                             offset=0,
-                             digits_show=1,
-                             fmt=None,
-                             formatter=None)
-    meta_plot.add(new_entry_1)
-    meta_plot.to_json(r'/afs/ifh.de/group/pitz/data/duoxup/sim1/pyS/colmeta_4.json')
-    
-
