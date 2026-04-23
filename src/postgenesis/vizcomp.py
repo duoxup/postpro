@@ -61,3 +61,69 @@ class CaseComparison:
                     f"cases length ({len(self.cases)})"
                 )
             self.labels = list(labels)
+
+    def plot_zevo(
+        self,
+        yattrs: list[str],
+        *,
+        sharex: bool = True,
+        sharey: bool = False,
+        fig: plt.Figure | None = None,
+        axes: np.ndarray | None = None,
+        **pltkwargs,
+    ) -> tuple[plt.Figure, np.ndarray]:
+        """Overlay z-evolution curves for all cases.
+
+        One subplot per entry in *yattrs* (vertical stack).
+        x-axis is always ``zplot``; each case is one line.
+        """
+        n = len(yattrs)
+        if fig is None or axes is None:
+            fig, axes_arr = plt.subplots(
+                n, 1,
+                sharex="all" if sharex else False,
+                sharey="all" if sharey else False,
+                squeeze=False,
+                layout="constrained",
+                figsize=(6, 2.5 * n),
+            )
+            axes_arr = axes_arr.ravel()
+        else:
+            axes_arr = np.asarray(axes).ravel()
+
+        x_meta = colmr.get("zplot")
+        x_unit = x_meta.unit or ""
+        x_scale, x_prefix = _autoscale(self.cases[0].zplot, x_unit)
+
+        for i, yattr in enumerate(yattrs):
+            ax = axes_arr[i]
+            y_meta = colmr.get(yattr)
+            y_unit = y_meta.unit or ""
+
+            all_y = np.concatenate(
+                [np.asarray(getattr(gmr, yattr)).flatten() for gmr in self.cases]
+            )
+            y_scale, y_prefix = _autoscale(all_y, y_unit)
+
+            for gmr, label in zip(self.cases, self.labels):
+                ax.plot(
+                    gmr.zplot * x_scale,
+                    np.asarray(getattr(gmr, yattr)) * y_scale,
+                    label=label,
+                    **pltkwargs,
+                )
+
+            ax.legend()
+
+            y_lbl = y_meta.axis_label or yattr
+            if y_unit:
+                y_lbl = f"{y_lbl} [{y_prefix}{y_unit}]"
+            ax.set_ylabel(y_lbl)
+
+            if not sharex or i == n - 1:
+                x_lbl = x_meta.axis_label or "z"
+                if x_unit:
+                    x_lbl = f"{x_lbl} [{x_prefix}{x_unit}]"
+                ax.set_xlabel(x_lbl)
+
+        return fig, axes_arr
