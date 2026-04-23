@@ -41,3 +41,23 @@ def _load_case(x) -> MainResults:
     raise TypeError(
         f"Expected str, Path, or MainResults, got {type(x).__name__}"
     )
+
+
+class CaseComparison:
+    """Compare multiple MainResults files with overlay plots."""
+
+    def __init__(
+        self,
+        cases: list,
+        labels: list[str] | None = None,
+    ) -> None:
+        self.cases: list[MainResults] = [_load_case(c) for c in cases]
+        if labels is None:
+            self.labels: list[str] = [_auto_label(gmr) for gmr in self.cases]
+        else:
+            if len(labels) != len(self.cases):
+                raise ValueError(
+                    f"labels length ({len(labels)}) does not match "
+                    f"cases length ({len(self.cases)})"
+                )
+            self.labels = list(labels)
