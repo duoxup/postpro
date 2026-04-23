@@ -127,3 +127,95 @@ class CaseComparison:
                 ax.set_xlabel(x_lbl)
 
         return fig, axes_arr
+
+    def plot_zslice(
+        self,
+        yattrs: list[str],
+        *,
+        z: Union[float, list, None] = None,
+        xattr: str = "t_from_s",
+        sharex: bool = True,
+        sharey: bool = False,
+        fig: plt.Figure | None = None,
+        axes: np.ndarray | None = None,
+        **pltkwargs,
+    ) -> tuple[plt.Figure, np.ndarray]:
+        """Overlay z-slice profiles for all cases.
+
+        Each row is one entry in *yattrs*; each column is one z value.
+        Returns ``axes`` with shape ``(n_yattrs,)`` for a single z, or
+        ``(n_yattrs, n_z)`` for a list of z values.
+        """
+        if z is None:
+            z_list = [None]
+        elif isinstance(z, (int, float)):
+            z_list = [z]
+        else:
+            z_list = list(z)
+
+        n_y = len(yattrs)
+        n_z = len(z_list)
+
+        if fig is None or axes is None:
+            fig, axes_2d = plt.subplots(
+                n_y, n_z,
+                sharex="all" if sharex else False,
+                sharey="all" if sharey else False,
+                squeeze=False,
+                layout="constrained",
+                figsize=(4 * n_z, 2.5 * n_y),
+            )
+        else:
+            axes_2d = np.asarray(axes).reshape(n_y, n_z)
+
+        x_meta = colmr.get(xattr)
+        x_unit = x_meta.unit or ""
+        x_scale, x_prefix = _autoscale(
+            np.asarray(getattr(self.cases[0], xattr)).flatten(), x_unit
+        )
+
+        for j, z_val in enumerate(z_list):
+            z_arg = "last" if z_val is None else z_val
+
+            for i, yattr in enumerate(yattrs):
+                ax = axes_2d[i, j]
+                y_meta = colmr.get(yattr)
+                y_unit = y_meta.unit or ""
+
+                y_slices: list[np.ndarray] = []
+                z_actual = 0.0
+                for gmr in self.cases:
+                    y_data, z_act = gmr.get_data_at_z(yattr, z_arg)
+                    if not isinstance(y_data, np.ndarray) or y_data.ndim != 1:
+                        raise ValueError(
+                            f"plot_zslice: '{yattr}' did not produce a 1-D array "
+                            f"at z={z_val!r}. Pass 2-D quantities (e.g. 'intfar', "
+                            f"'power') to plot_zslice; use plot_zevo for 1-D quantities."
+                        )
+                    y_slices.append(y_data)
+                    z_actual = float(z_act)
+
+                y_scale, y_prefix = _autoscale(np.concatenate(y_slices), y_unit)
+
+                for k, (gmr, label) in enumerate(zip(self.cases, self.labels)):
+                    x = np.asarray(getattr(gmr, xattr)) * x_scale
+                    ax.plot(x, y_slices[k] * y_scale, label=label, **pltkwargs)
+
+                ax.set_title(f"z = {z_actual:.3f} m")
+                ax.legend()
+
+                if not sharey or j == 0:
+                    y_lbl = y_meta.axis_label or yattr
+                    if y_unit:
+                        y_lbl = f"{y_lbl} [{y_prefix}{y_unit}]"
+                    ax.set_ylabel(y_lbl)
+
+                if not sharex or i == n_y - 1:
+                    x_lbl = x_meta.axis_label or xattr
+                    if x_unit:
+                        x_lbl = f"{x_lbl} [{x_prefix}{x_unit}]"
+                    ax.set_xlabel(x_lbl)
+
+        if n_z == 1:
+            return fig, axes_2d.ravel()
+        return fig, axes_2d
