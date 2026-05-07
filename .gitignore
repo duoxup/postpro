@@ -1,24 +1,42 @@
+# Python
 __pycache__/
 *.py[cod]
 *.so
-*.dylib
-*.dll
 
-.dist/
+# Build / packaging
 build/
 dist/
 *.egg-info/
+.eggs/
+pip-wheel-metadata/
 
+# Virtual environments
 .venv/
 venv/
-.env
+env/
 
-.ipynb_checkpoints/
+# Test / tooling caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 
+# Editors / OS
 .DS_Store
+.idea/
+.vscode/
 
-tests/
-console/
+# Local agent / misc
+.codex
+
+# Generated outputs
+outputs/
+
+# Local simulation artefacts
+*.out.h5
+*.fld.h5
+*.par.h5
+*.dfl.h5
+*.dpa.h5
+*.log

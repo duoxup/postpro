@@ -3,32 +3,33 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "postgenesis"
+name = "postpro"
 version = "0.1.0"
-description = "Post-processing and visualization toolkit for Genesis FEL simulation results"
+description = "Modular post-processing toolkit with a Genesis backend"
+readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "duoxup" }]
+authors = [
+  { name = "Xu Du" }
+]
 dependencies = [
-    "numpy",
-    "scipy",
-    "matplotlib",
-    "pandas",
-    "h5py",
-    "tqdm",
-    # Private dependencies (install separately):
-    #   dstrux
-    #   xtils
+  "h5py>=3.10",
+  "matplotlib>=3.8",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "scipy>=1.12",
+  "tqdm>=4.66",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "black", "ipykernel"]
+dev = [
+  "pytest>=8.0",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["postgenesis*"]
 
-[tool.ruff]
-line-length = 100
+[tool.pytest.ini_options]
+testpaths = ["tests"]
