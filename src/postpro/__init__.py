@@ -10,6 +10,8 @@ from postpro.backends.genesis import (
     ParticleResults,
 )
 from postpro.api import (
+    collect_scan_rows,
+    collect_scan_table,
     render_pulse_metrics,
     render_slice_diagnostics,
     render_spectrum,
@@ -20,6 +22,8 @@ __all__ = [
     "FieldResults",
     "MainResults",
     "ParticleResults",
+    "collect_scan_rows",
+    "collect_scan_table",
     "render_pulse_metrics",
     "render_slice_diagnostics",
     "render_spectrum",

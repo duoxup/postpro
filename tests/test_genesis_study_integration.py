@@ -56,7 +56,7 @@ def test_genesis_scan_records_use_core_case_record(tmp_path: Path) -> None:
     _write_minimal_genesis_main_output(case_dir / "g4.000.out.h5")
     (tmp_path / "cases.csv").write_text("case_id,directory,param_a\n1,case001,42\n", encoding="utf-8")
 
-    records = load_case_records(tmp_path, version=2)
+    records = load_case_records(tmp_path)
 
     assert len(records) == 1
     assert isinstance(records[0], CaseRecord)
@@ -73,7 +73,7 @@ def test_genesis_load_study_materializes_results_and_evaluates_metrics(tmp_path:
     _write_minimal_genesis_main_output(case_dir / "g4.000.out.h5")
     (tmp_path / "cases.csv").write_text("case_id,directory,param_a\n1,case001,42\n", encoding="utf-8")
 
-    study = load_study(tmp_path, version=2, eager=False)
+    study = load_study(tmp_path, eager=False)
     materialized = study.materialize()
 
     assert study.case_ids() == ("1",)
@@ -98,7 +98,7 @@ def test_cluster_statistics_uses_study_and_metric_registry(tmp_path: Path) -> No
     _write_minimal_genesis_main_output(case_dir / "g4.000.out.h5")
     (tmp_path / "cases.csv").write_text("case_id,directory,param_a\n1,case001,42\n", encoding="utf-8")
 
-    rows = cluster_statistics(tmp_path, zs=[1.0], ratios2max=[1.0], version=2)
+    rows = cluster_statistics(tmp_path, zs=[1.0], ratios2max=[1.0])
 
     assert len(rows) == 1
     assert rows[0]["case_id"] == "1"

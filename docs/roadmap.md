@@ -83,6 +83,11 @@
 - 已把单 case 图的标签、单位和自动缩放接到 `paramstudy`
 - 当前支持用户通过额外 metadata 覆盖默认定义
 
+10. Scan 用户层起步
+- 已实现 `collect_scan_rows(...)`
+- 已实现 `collect_scan_table(...)`
+- 当前输出格式是适合 `paramstudy` 的一行一个 case 结果表
+
 ### 当前状态
 
 当前仓库已经完成“地基阶段”的大部分工作。  
@@ -123,7 +128,18 @@
 - 决定是否把同样的 metadata/缩放机制推广到后续 `FieldResults` / `ParticleResults`
 - 后续 scan 图继续统一走 `paramstudy` 原生 API
 
-### 阶段 3：恢复最小工程包装
+### 阶段 3：重建 scan / multi-case 用户层
+
+当前状态：
+- Genesis scan 目录已经可以直接产出一行一个 case 的结果表
+- 当前仍是最小版本，主要覆盖统计量收集，不涉及 scan 图封装
+
+剩余工作：
+- 继续扩充 scan metric 体系
+- 决定是否提供更高层的 `paramstudy` 对接辅助
+- 用真实服务器结果验证 scan 表结构和列命名
+
+### 阶段 4：恢复最小工程包装
 
 目标：
 - 让项目重新具备可安装、可测试、可持续开发的基础工程能力
@@ -134,7 +150,7 @@
 - 测试运行约定
 - 可能的 lint/format 配置
 
-### 阶段 4：扩展其他结果类型
+### 阶段 5：扩展其他结果类型
 
 目标：
 - 在 `MainResults` 路线稳定后，再把同样的抽象推广到：

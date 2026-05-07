@@ -19,8 +19,7 @@ def test_default_meta_spec_covers_all_main_results_keys() -> None:
 
     assert set(spec) == expected
     assert spec["zenergy"]["unit"] == "J"
-    assert spec["zsigmat_fld"]["preferred_unit"] == "fs"
-    assert spec["wavelength_spectra_wl"]["preferred_unit"] == "nm"
+    assert all(entry["preferred_unit"] is None for entry in spec.values())
     assert spec["bunching"]["unit"] is None
 
 

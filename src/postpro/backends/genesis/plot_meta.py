@@ -82,7 +82,7 @@ _DEFAULT_OVERRIDES: Mapping[str, dict[str, str | None]] = {
     "seed_label": {"label": "Seed label"},
     "slice_num": {"label": "Slice index", "symbol": "i"},
     "slippage": {"label": "Slippage", "symbol": "Delta s_slip", "unit": "m"},
-    "t_from_s": {"label": "Time coordinate", "symbol": "t", "unit": "s", "preferred_unit": "fs"},
+    "t_from_s": {"label": "Time coordinate", "symbol": "t", "unit": "s"},
     "TimeStamp": {"label": "Timestamp"},
     "User": {"label": "User"},
     "wavelength_spectra_int": {"label": "Spectral intensity", "symbol": "S_lambda", "unit": "a.u."},
@@ -90,7 +90,6 @@ _DEFAULT_OVERRIDES: Mapping[str, dict[str, str | None]] = {
         "label": "Wavelength",
         "symbol": "lambda",
         "unit": "m",
-        "preferred_unit": "nm",
     },
     "xdivergence": {"label": "Field divergence x", "symbol": "theta_x", "unit": "rad"},
     "xpointing": {"label": "Field pointing x", "symbol": "theta_x0", "unit": "rad"},
@@ -98,10 +97,10 @@ _DEFAULT_OVERRIDES: Mapping[str, dict[str, str | None]] = {
     "ypointing": {"label": "Field pointing y", "symbol": "theta_y0", "unit": "rad"},
     "z": {"label": "Lattice position", "symbol": "z", "unit": "m"},
     "zenergy": {"label": "Pulse energy", "symbol": "E_pulse", "unit": "J"},
-    "zfwhm_fld": {"label": "Pulse duration FWHM", "symbol": "tau_FWHM", "unit": "s", "preferred_unit": "fs"},
+    "zfwhm_fld": {"label": "Pulse duration FWHM", "symbol": "tau_FWHM", "unit": "s"},
     "zplot": {"label": "Undulator position", "symbol": "z", "unit": "m"},
     "zpower": {"label": "Integrated power", "symbol": "P_int", "unit": "W"},
-    "zsigmat_fld": {"label": "Pulse duration RMS", "symbol": "sigma_t", "unit": "s", "preferred_unit": "fs"},
+    "zsigmat_fld": {"label": "Pulse duration RMS", "symbol": "sigma_t", "unit": "s"},
 }
 
 _TOKEN_LABELS: Mapping[str, str] = {

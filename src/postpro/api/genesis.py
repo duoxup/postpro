@@ -7,9 +7,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from matplotlib.figure import Figure
 
 from postpro.backends.genesis.adapters import GenesisResultLike, require_main_results
+from postpro.backends.genesis.metric_registry import build_stat_metric_registry
 from postpro.backends.genesis.models import MainResults
 from postpro.backends.genesis.plot_figures import (
     pulse_metrics_figure,
@@ -17,6 +19,8 @@ from postpro.backends.genesis.plot_figures import (
     spectrum_figure,
     zoverview,
 )
+from postpro.backends.genesis.scan import load_study
+from postpro.core.metric import MetricRegistry
 
 GenesisSource = str | Path | GenesisResultLike
 AxesArray = np.ndarray
@@ -130,6 +134,48 @@ def render_spectrum(
     return fig, axes
 
 
+def collect_scan_rows(
+    cluster_dir: str | Path,
+    *,
+    registry: MetricRegistry | None = None,
+    metric_names: list[str] | tuple[str, ...] | None = None,
+    zs: list[float] | None = None,
+    ratios2max: list[float] | None = None,
+    include_params: bool = True,
+    eager: bool = False,
+) -> list[dict[str, object]]:
+    study = load_study(cluster_dir, eager=eager)
+    metric_registry = _resolve_metric_registry(
+        registry=registry,
+        zs=zs,
+        ratios2max=ratios2max,
+    )
+    names = tuple(metric_names) if metric_names is not None else metric_registry.names()
+    return study.evaluate(names, metric_registry, include_params=include_params)
+
+
+def collect_scan_table(
+    cluster_dir: str | Path,
+    *,
+    registry: MetricRegistry | None = None,
+    metric_names: list[str] | tuple[str, ...] | None = None,
+    zs: list[float] | None = None,
+    ratios2max: list[float] | None = None,
+    include_params: bool = True,
+    eager: bool = False,
+) -> pd.DataFrame:
+    rows = collect_scan_rows(
+        cluster_dir,
+        registry=registry,
+        metric_names=metric_names,
+        zs=zs,
+        ratios2max=ratios2max,
+        include_params=include_params,
+        eager=eager,
+    )
+    return pd.DataFrame(rows)
+
+
 @contextmanager
 def _managed_main_results(source: GenesisSource) -> Iterator[MainResults]:
     if isinstance(source, (str, Path)):
@@ -148,3 +194,14 @@ def _save_figure(fig: Figure, *, save_to: str | Path | None, dpi: int) -> None:
     path = Path(save_to)
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=dpi)
+
+
+def _resolve_metric_registry(
+    *,
+    registry: MetricRegistry | None,
+    zs: list[float] | None,
+    ratios2max: list[float] | None,
+) -> MetricRegistry:
+    if registry is not None:
+        return registry
+    return build_stat_metric_registry(zs=zs, ratios2max=ratios2max)

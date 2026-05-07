@@ -29,6 +29,7 @@ dependency, because it lives in a separate repository during this refactor.
 
 ```python
 from postpro.api.genesis import (
+    collect_scan_table,
     render_pulse_metrics,
     render_slice_diagnostics,
     render_spectrum,
@@ -39,6 +40,18 @@ render_zoverview("g4.000.out.h5", save_to="z_overview.png")
 render_pulse_metrics("g4.000.out.h5", save_to="pulse_metrics.png")
 render_slice_diagnostics("g4.000.out.h5", save_to="slice_profiles.png")
 render_spectrum("g4.000.out.h5", save_to="spectrum.png")
+```
+
+Current scan API:
+
+```python
+from postpro.api.genesis import collect_scan_table
+
+df = collect_scan_table(
+    "path/to/scan",
+    zs=[1.0],
+    ratios2max=[1.0],
+)
 ```
 
 Top-level re-exports are also available:

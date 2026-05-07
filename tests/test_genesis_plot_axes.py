@@ -81,7 +81,7 @@ def test_z_axes_plotters_draw_expected_lines_and_labels(tmp_path: Path) -> None:
     plot_z_field_size(axes[3], result)
 
     assert len(axes[0].lines) == 2
-    assert axes[0].get_ylabel() == "Duration [fs]"
+    assert axes[0].get_ylabel().startswith("Duration [")
     assert axes[0].get_title() == "Pulse length"
     assert axes[0].get_legend() is not None
 
