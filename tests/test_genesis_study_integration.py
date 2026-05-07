@@ -105,3 +105,23 @@ def test_cluster_statistics_uses_study_and_metric_registry(tmp_path: Path) -> No
     assert rows[0]["param_a"] == 42
     assert rows[0]["max_power"] == 11.0
     assert rows[0]["energy@1.00m"] == 2.2e-6
+
+
+def test_scan_loading_supports_user_defined_result_relpath(tmp_path: Path) -> None:
+    case_dir = tmp_path / "case001" / "results"
+    case_dir.mkdir(parents=True)
+    _write_minimal_genesis_main_output(case_dir / "g4.000.out.h5")
+    (tmp_path / "cases.csv").write_text("case_id,directory,param_a\n1,case001,42\n", encoding="utf-8")
+
+    records = load_case_records(tmp_path, result_relpath="results/g4.000.out.h5")
+    study = load_study(tmp_path, result_relpath="results/g4.000.out.h5", eager=False)
+    rows = cluster_statistics(
+        tmp_path,
+        zs=[1.0],
+        ratios2max=[1.0],
+        result_relpath="results/g4.000.out.h5",
+    )
+
+    assert records[0].artifact_path == tmp_path / "case001" / "results" / "g4.000.out.h5"
+    assert study.cases[0].artifact_path == tmp_path / "case001" / "results" / "g4.000.out.h5"
+    assert rows[0]["max_energy"] == 2.2e-6

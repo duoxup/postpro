@@ -49,14 +49,15 @@ def _write_case(
     cluster_dir: Path,
     *,
     directory: str,
+    result_relpath: str = "outputs/g4.000.out.h5",
     power: np.ndarray,
     intensity_far: np.ndarray,
     energy: np.ndarray,
 ) -> None:
-    case_dir = cluster_dir / directory / "outputs"
+    case_dir = cluster_dir / directory / Path(result_relpath).parent
     case_dir.mkdir(parents=True)
     _write_minimal_genesis_main_output(
-        case_dir / "g4.000.out.h5",
+        cluster_dir / directory / result_relpath,
         power=power,
         intensity_far=intensity_far,
         energy=energy,
@@ -140,3 +141,24 @@ def test_collect_scan_table_accepts_string_cluster_path(tmp_path: Path) -> None:
     df = collect_scan_table(str(tmp_path))
 
     assert df["case_id"].tolist() == ["1"]
+
+
+def test_collect_scan_table_supports_custom_result_relpath(tmp_path: Path) -> None:
+    _write_case(
+        tmp_path,
+        directory="case001",
+        result_relpath="results/g4.000.out.h5",
+        power=np.array([[1.0, 3.0, 2.0], [2.0, 5.0, 4.0]]),
+        intensity_far=np.array([[1.0, 4.0, 1.0], [0.0, 2.0, 0.0]]),
+        energy=np.array([1.1e-6, 2.2e-6]),
+    )
+    (tmp_path / "cases.csv").write_text(
+        "case_id,directory,param_a\n"
+        "1,case001,42\n",
+        encoding="utf-8",
+    )
+
+    df = collect_scan_table(tmp_path, result_relpath="results/g4.000.out.h5")
+
+    assert df["case_id"].tolist() == ["1"]
+    assert df["max_energy"].tolist() == [2.2e-6]

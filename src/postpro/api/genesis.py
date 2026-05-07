@@ -137,6 +137,7 @@ def render_spectrum(
 def collect_scan_rows(
     cluster_dir: str | Path,
     *,
+    result_relpath: str | Path = "outputs/g4.000.out.h5",
     registry: MetricRegistry | None = None,
     metric_names: list[str] | tuple[str, ...] | None = None,
     zs: list[float] | None = None,
@@ -144,7 +145,7 @@ def collect_scan_rows(
     include_params: bool = True,
     eager: bool = False,
 ) -> list[dict[str, object]]:
-    study = load_study(cluster_dir, eager=eager)
+    study = load_study(cluster_dir, result_relpath=result_relpath, eager=eager)
     metric_registry = _resolve_metric_registry(
         registry=registry,
         zs=zs,
@@ -157,6 +158,7 @@ def collect_scan_rows(
 def collect_scan_table(
     cluster_dir: str | Path,
     *,
+    result_relpath: str | Path = "outputs/g4.000.out.h5",
     registry: MetricRegistry | None = None,
     metric_names: list[str] | tuple[str, ...] | None = None,
     zs: list[float] | None = None,
@@ -166,6 +168,7 @@ def collect_scan_table(
 ) -> pd.DataFrame:
     rows = collect_scan_rows(
         cluster_dir,
+        result_relpath=result_relpath,
         registry=registry,
         metric_names=metric_names,
         zs=zs,

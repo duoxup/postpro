@@ -54,6 +54,16 @@ df = collect_scan_table(
 )
 ```
 
+If your main result file is not stored at `outputs/g4.000.out.h5`, pass a
+case-relative path explicitly:
+
+```python
+df = collect_scan_table(
+    "path/to/scan",
+    result_relpath="results/main_output.h5",
+)
+```
+
 Top-level re-exports are also available:
 
 ```python

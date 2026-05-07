@@ -15,10 +15,17 @@ def discover_case_directories(cluster_dir: str | Path) -> list[str]:
     return [str(directory) for directory in df["directory"].tolist()]
 
 
-def load_case_records(cluster_dir: str | Path) -> list[CaseRecord]:
+def load_case_records(
+    cluster_dir: str | Path,
+    *,
+    result_relpath: str | Path = "outputs/g4.000.out.h5",
+) -> list[CaseRecord]:
     cluster_path = Path(cluster_dir)
     df = _load_cases_df(cluster_path)
     df_params = df.drop(columns=["case_id", "directory"])
+    artifact_relpath = Path(result_relpath)
+    if artifact_relpath.is_absolute():
+        raise ValueError("result_relpath must be relative to each case directory.")
 
     records: list[CaseRecord] = []
     for idx in range(len(df)):
@@ -29,15 +36,20 @@ def load_case_records(cluster_dir: str | Path) -> list[CaseRecord]:
             CaseRecord(
                 case_id=case_id,
                 params=caseargs,
-                artifact_path=cluster_path / casefolder / "outputs/g4.000.out.h5",
+                artifact_path=cluster_path / casefolder / artifact_relpath,
                 result_loader=_load_case_result,
             )
         )
     return records
 
 
-def load_study(cluster_dir: str | Path, *, eager: bool = False) -> Study:
-    study = Study(cases=load_case_records(cluster_dir))
+def load_study(
+    cluster_dir: str | Path,
+    *,
+    result_relpath: str | Path = "outputs/g4.000.out.h5",
+    eager: bool = False,
+) -> Study:
+    study = Study(cases=load_case_records(cluster_dir, result_relpath=result_relpath))
     if eager:
         return study.materialize()
     return study
