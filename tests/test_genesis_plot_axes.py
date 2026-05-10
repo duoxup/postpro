@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "paramstudy" / "src
 from postpro.backends.genesis import (
     MainResults,
     build_default_main_results_meta,
+    plot_pulse_structure,
     plot_slice_bunching,
     plot_slice_current,
     plot_spectrum,
@@ -98,6 +99,29 @@ def test_z_axes_plotters_draw_expected_lines_and_labels(tmp_path: Path) -> None:
     assert axes[3].get_ylabel() == "Field size [um]"
     assert axes[3].get_title() == "Field transverse size"
     assert axes[3].get_legend() is not None
+
+    plt.close(fig)
+    result.close()
+
+
+def test_pulse_structure_plotter_supports_time_and_power_axes(tmp_path: Path) -> None:
+    path = tmp_path / "mini.out.h5"
+    _write_genesis_main_output_for_plot_axes(path)
+    result = MainResults(path)
+
+    fig, axes = plt.subplots(2, 1, figsize=(7, 6))
+    plot_pulse_structure(axes[0], result, z=0.8)
+    plot_pulse_structure(axes[1], result, z=0.8, x_key="g_s", y_key="power")
+
+    assert len(axes[0].lines) == 1
+    assert axes[0].get_xlabel().startswith("Time coordinate [")
+    assert axes[0].get_ylabel() == "Far-field intensity"
+    assert axes[0].get_title() == "Pulse structure at z = 1.000 m"
+
+    assert len(axes[1].lines) == 1
+    assert axes[1].get_xlabel().startswith("Bunch-frame position [")
+    assert axes[1].get_ylabel() == "Radiation power [W]"
+    assert axes[1].lines[0].get_ydata().tolist() == [2.0, 5.0, 4.0]
 
     plt.close(fig)
     result.close()

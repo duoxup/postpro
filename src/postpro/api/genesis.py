@@ -14,6 +14,7 @@ from postpro.backends.genesis.adapters import GenesisResultLike, require_main_re
 from postpro.backends.genesis.metric_registry import build_stat_metric_registry
 from postpro.backends.genesis.models import MainResults
 from postpro.backends.genesis.plot_figures import (
+    pulse_structure_figure,
     pulse_metrics_figure,
     slice_diagnostics,
     spectrum_figure,
@@ -127,6 +128,38 @@ def render_spectrum(
             unit_options=unit_options,
             z=z,
             use_nearfield=use_nearfield,
+            figsize=figsize,
+            suptitle=suptitle,
+        )
+    _save_figure(fig, save_to=save_to, dpi=dpi)
+    return fig, axes
+
+
+def render_pulse_structure(
+    source: GenesisSource,
+    *,
+    meta=None,
+    label_options=None,
+    unit_options=None,
+    z: float | str | None = "max_energy",
+    x: str = "t_from_s",
+    y: str = "intfar",
+    sort_x: bool = True,
+    save_to: str | Path | None = None,
+    dpi: int = 140,
+    figsize: tuple[float, float] = (8.0, 4.0),
+    suptitle: str | None = None,
+) -> tuple[Figure, AxesArray]:
+    with _managed_main_results(source) as result:
+        fig, axes = pulse_structure_figure(
+            result,
+            meta=meta,
+            label_options=label_options,
+            unit_options=unit_options,
+            z=z,
+            x_key=x,
+            y_key=y,
+            sort_x=sort_x,
             figsize=figsize,
             suptitle=suptitle,
         )

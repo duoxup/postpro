@@ -198,6 +198,41 @@ def plot_slice_bunching(
     )
 
 
+def plot_pulse_structure(
+    ax: Axes,
+    result: GenesisResultLike,
+    *,
+    meta: Any = None,
+    label_options: Any = None,
+    unit_options: Any = None,
+    z: float | str = "last",
+    x_key: str = "t_from_s",
+    y_key: str = "intfar",
+    xlabel: str | None = "auto",
+    ylabel: str | None = None,
+    title: str | None = None,
+    label: str | None = None,
+    sort_x: bool = True,
+    grid: bool = True,
+) -> Axes:
+    series = slice_profile_series(result, z=z, x_key=x_key, y_keys=(y_key,))
+    xlabel_text = x_key if xlabel == "auto" else xlabel
+    return _plot_series(
+        ax,
+        series,
+        meta=meta,
+        label_options=label_options,
+        unit_options=unit_options,
+        ylabel=ylabel,
+        xlabel=xlabel_text,
+        title=_slice_title("Pulse structure", series, title),
+        labels={} if label is None else {y_key: label},
+        grid=grid,
+        legend=False,
+        sort_x=sort_x,
+    )
+
+
 def plot_spectrum(
     ax: Axes,
     result: GenesisResultLike,

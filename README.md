@@ -31,6 +31,7 @@ dependency, because it lives in a separate repository during this refactor.
 from postpro.api.genesis import (
     collect_scan_table,
     render_pulse_metrics,
+    render_pulse_structure,
     render_slice_diagnostics,
     render_spectrum,
     render_zoverview,
@@ -38,6 +39,7 @@ from postpro.api.genesis import (
 
 render_zoverview("g4.000.out.h5", save_to="z_overview.png")
 render_pulse_metrics("g4.000.out.h5", save_to="pulse_metrics.png")
+render_pulse_structure("g4.000.out.h5", x="t_from_s", y="intfar", save_to="pulse_structure.png")
 render_slice_diagnostics("g4.000.out.h5", save_to="slice_profiles.png")
 render_spectrum("g4.000.out.h5", save_to="spectrum.png")
 ```

@@ -26,6 +26,7 @@ from postpro.backends.genesis.plot_series import (
     z_pulse_length_series,
 )
 from postpro.backends.genesis.plot_axes import (
+    plot_pulse_structure,
     plot_slice_bunching,
     plot_slice_current,
     plot_spectrum,
@@ -36,6 +37,7 @@ from postpro.backends.genesis.plot_axes import (
 )
 from postpro.backends.genesis.plot_figures import (
     pulse_metrics_figure,
+    pulse_structure_figure,
     slice_diagnostics,
     spectrum_figure,
     zoverview,
@@ -64,12 +66,14 @@ __all__ = [
     "require_main_results",
     "plot_slice_bunching",
     "plot_slice_current",
+    "plot_pulse_structure",
     "plot_spectrum",
     "plot_z_energy",
     "plot_z_field_size",
     "plot_z_particle_size",
     "plot_z_pulse_length",
     "pulse_metrics_figure",
+    "pulse_structure_figure",
     "slice_profile_series",
     "slice_diagnostics",
     "spectrum_series",

@@ -9,6 +9,7 @@ from matplotlib.figure import Figure
 
 from postpro.backends.genesis.adapters import GenesisResultLike, require_main_results
 from postpro.backends.genesis.plot_axes import (
+    plot_pulse_structure,
     plot_slice_bunching,
     plot_slice_current,
     plot_spectrum,
@@ -162,6 +163,38 @@ def spectrum_figure(
     )
 
     fig.suptitle(_resolve_suptitle(result, suptitle, fallback="Spectrum"))
+    return fig, axes
+
+
+def pulse_structure_figure(
+    result: GenesisResultLike,
+    *,
+    meta=None,
+    label_options=None,
+    unit_options=None,
+    z: ZSelector = "max_energy",
+    x_key: str = "t_from_s",
+    y_key: str = "intfar",
+    sort_x: bool = True,
+    figsize: tuple[float, float] = (8.0, 4.0),
+    suptitle: str | None = None,
+) -> tuple[Figure, np.ndarray]:
+    fig, axes = _subplots(1, 1, figsize=figsize, sharex=False)
+    z_target = _resolve_z(result, z)
+
+    plot_pulse_structure(
+        axes[0],
+        result,
+        meta=meta,
+        label_options=label_options,
+        unit_options=unit_options,
+        z=z_target,
+        x_key=x_key,
+        y_key=y_key,
+        sort_x=sort_x,
+    )
+
+    fig.suptitle(_resolve_suptitle(result, suptitle, fallback="Pulse structure"))
     return fig, axes
 
 

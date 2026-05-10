@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "paramstudy" / "src
 from postpro.backends.genesis import (
     MainResults,
     pulse_metrics_figure,
+    pulse_structure_figure,
     slice_diagnostics,
     spectrum_figure,
     zoverview,
@@ -106,5 +107,21 @@ def test_slice_and_spectrum_figures_resolve_max_energy_z(tmp_path: Path) -> None
     assert axes_spectrum[0].get_title() == "Spectrum (farfield) at z = 1.000 m"
     assert fig_spectrum._suptitle is not None
     assert fig_spectrum._suptitle.get_text() == "mini.out.h5"
+
+    result.close()
+
+
+def test_pulse_structure_figure_resolves_max_energy_z(tmp_path: Path) -> None:
+    path = tmp_path / "mini.out.h5"
+    _write_genesis_main_output_for_plot_figures(path)
+    result = MainResults(path)
+
+    fig, axes = pulse_structure_figure(result, x_key="g_s", y_key="power")
+
+    assert len(axes) == 1
+    assert axes[0].get_title() == "Pulse structure at z = 1.000 m"
+    assert axes[0].get_ylabel() == "Radiation power [W]"
+    assert fig._suptitle is not None
+    assert fig._suptitle.get_text() == "mini.out.h5"
 
     result.close()

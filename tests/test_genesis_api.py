@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "paramstudy" / "src
 
 from postpro.api.genesis import (
     render_pulse_metrics,
+    render_pulse_structure,
     render_slice_diagnostics,
     render_spectrum,
     render_zoverview,
@@ -73,21 +74,30 @@ def test_render_functions_accept_file_paths_and_save_outputs(tmp_path: Path) -> 
     fig2, axes2 = render_pulse_metrics(input_path, save_to=tmp_path / "pulse_metrics.png")
     fig3, axes3 = render_slice_diagnostics(input_path, save_to=tmp_path / "slice.png")
     fig4, axes4 = render_spectrum(input_path, save_to=tmp_path / "spectrum.png")
+    fig5, axes5 = render_pulse_structure(
+        input_path,
+        x="g_s",
+        y="power",
+        save_to=tmp_path / "pulse_structure.png",
+    )
 
     assert len(axes1) == 4
     assert len(axes2) == 2
     assert len(axes3) == 2
     assert len(axes4) == 1
+    assert len(axes5) == 1
 
     assert (tmp_path / "zoverview.png").is_file()
     assert (tmp_path / "pulse_metrics.png").is_file()
     assert (tmp_path / "slice.png").is_file()
     assert (tmp_path / "spectrum.png").is_file()
+    assert (tmp_path / "pulse_structure.png").is_file()
 
     plt.close(fig1)
     plt.close(fig2)
     plt.close(fig3)
     plt.close(fig4)
+    plt.close(fig5)
 
 
 def test_render_functions_accept_existing_results_objects(tmp_path: Path) -> None:
