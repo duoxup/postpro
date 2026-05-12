@@ -143,6 +143,31 @@ def test_collect_scan_table_accepts_string_cluster_path(tmp_path: Path) -> None:
     assert df["case_id"].tolist() == ["1"]
 
 
+def test_collect_scan_rows_parallel_matches_serial(tmp_path: Path) -> None:
+    for idx in range(4):
+        _write_case(
+            tmp_path,
+            directory=f"case{idx:03d}",
+            power=np.array([[1.0 + idx, 3.0, 2.0], [2.0, 5.0 + idx, 4.0]]),
+            intensity_far=np.array([[1.0, 4.0, 1.0], [0.0, 2.0, 0.0]]),
+            energy=np.array([1.1e-6, 2.2e-6 + idx * 1e-7]),
+        )
+    (tmp_path / "cases.csv").write_text(
+        "case_id,directory,param_a\n"
+        "0,case000,10\n"
+        "1,case001,20\n"
+        "2,case002,30\n"
+        "3,case003,40\n",
+        encoding="utf-8",
+    )
+
+    serial = collect_scan_rows(tmp_path, zs=[1.0], ratios2max=[1.0])
+    parallel = collect_scan_rows(tmp_path, zs=[1.0], ratios2max=[1.0], max_workers=4)
+
+    assert [row["case_id"] for row in parallel] == [row["case_id"] for row in serial]
+    assert parallel == serial
+
+
 def test_collect_scan_table_supports_custom_result_relpath(tmp_path: Path) -> None:
     _write_case(
         tmp_path,
