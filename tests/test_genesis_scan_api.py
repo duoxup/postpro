@@ -5,6 +5,7 @@ import sys
 
 import h5py
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -166,6 +167,61 @@ def test_collect_scan_rows_parallel_matches_serial(tmp_path: Path) -> None:
 
     assert [row["case_id"] for row in parallel] == [row["case_id"] for row in serial]
     assert parallel == serial
+
+
+def test_collect_scan_rows_raises_when_case_file_missing(tmp_path: Path) -> None:
+    _write_case(
+        tmp_path,
+        directory="case001",
+        power=np.array([[1.0, 3.0, 2.0], [2.0, 5.0, 4.0]]),
+        intensity_far=np.array([[1.0, 4.0, 1.0], [0.0, 2.0, 0.0]]),
+        energy=np.array([1.1e-6, 2.2e-6]),
+    )
+    (tmp_path / "case002").mkdir()
+    (tmp_path / "cases.csv").write_text(
+        "case_id,directory,param_a\n"
+        "1,case001,42\n"
+        "2,case002,84\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FileNotFoundError):
+        collect_scan_rows(tmp_path, zs=[1.0], ratios2max=[1.0])
+
+
+def test_collect_scan_rows_skip_missing_drops_absent_cases(tmp_path: Path) -> None:
+    _write_case(
+        tmp_path,
+        directory="case001",
+        power=np.array([[1.0, 3.0, 2.0], [2.0, 5.0, 4.0]]),
+        intensity_far=np.array([[1.0, 4.0, 1.0], [0.0, 2.0, 0.0]]),
+        energy=np.array([1.1e-6, 2.2e-6]),
+    )
+    (tmp_path / "case002").mkdir()
+    _write_case(
+        tmp_path,
+        directory="case003",
+        power=np.array([[2.0, 6.0, 3.0], [3.0, 7.0, 5.0]]),
+        intensity_far=np.array([[0.5, 3.0, 0.5], [0.0, 1.5, 0.0]]),
+        energy=np.array([1.4e-6, 2.8e-6]),
+    )
+    (tmp_path / "cases.csv").write_text(
+        "case_id,directory,param_a\n"
+        "1,case001,42\n"
+        "2,case002,84\n"
+        "3,case003,168\n",
+        encoding="utf-8",
+    )
+
+    rows = collect_scan_rows(
+        tmp_path, zs=[1.0], ratios2max=[1.0], skip_missing=True
+    )
+    assert [row["case_id"] for row in rows] == ["1", "3"]
+
+    rows_parallel = collect_scan_rows(
+        tmp_path, zs=[1.0], ratios2max=[1.0], skip_missing=True, max_workers=2
+    )
+    assert rows_parallel == rows
 
 
 def test_collect_scan_table_supports_custom_result_relpath(tmp_path: Path) -> None:

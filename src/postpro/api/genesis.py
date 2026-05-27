@@ -186,6 +186,7 @@ def collect_scan_rows(
     eager: bool = False,
     max_workers: int | None = None,
     progress: bool = False,
+    skip_missing: bool = False,
 ) -> list[dict[str, object]]:
     study = load_study(cluster_dir, result_relpath=result_relpath, eager=eager)
     metric_registry = _resolve_metric_registry(
@@ -201,6 +202,7 @@ def collect_scan_rows(
         include_params=include_params,
         max_workers=max_workers,
         progress=progress,
+        skip_missing=skip_missing,
     )
 
 
@@ -216,6 +218,7 @@ def collect_scan_table(
     eager: bool = False,
     max_workers: int | None = None,
     progress: bool = False,
+    skip_missing: bool = False,
 ) -> pd.DataFrame:
     rows = collect_scan_rows(
         cluster_dir,
@@ -228,6 +231,7 @@ def collect_scan_table(
         eager=eager,
         max_workers=max_workers,
         progress=progress,
+        skip_missing=skip_missing,
     )
     return pd.DataFrame(rows)
 
@@ -271,13 +275,14 @@ def _evaluate_study(
     include_params: bool,
     max_workers: int | None,
     progress: bool,
+    skip_missing: bool = False,
 ) -> list[dict[str, object]]:
     cases = study.cases
     if not cases:
         return []
 
     def work(case: CaseRecord) -> dict[str, object] | None:
-        return _evaluate_case_row(case, names, registry, include_params)
+        return _evaluate_case_row(case, names, registry, include_params, skip_missing)
 
     if max_workers is None or max_workers <= 1:
         iterator = map(work, cases)
@@ -298,12 +303,20 @@ def _evaluate_case_row(
     names: tuple[str, ...],
     registry: MetricRegistry,
     include_params: bool,
+    skip_missing: bool = False,
 ) -> dict[str, object] | None:
+    if skip_missing and case.result is None and case.artifact_path is not None:
+        if not Path(case.artifact_path).exists():
+            return None
     try:
         own_result = case.result is None
         result = case.load_result()
     except ValueError:
         return None
+    except FileNotFoundError:
+        if skip_missing:
+            return None
+        raise
     try:
         row: dict[str, object] = {"case_id": case.case_id}
         if include_params:

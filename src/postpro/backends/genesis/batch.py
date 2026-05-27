@@ -13,6 +13,7 @@ def cluster_statistics(
     ratios2max=None,
     max_workers: int | None = None,
     progress: bool = False,
+    skip_missing: bool = False,
     result_relpath="outputs/g4.000.out.h5",
 ):
     zs = [] if zs is None else zs
@@ -25,4 +26,5 @@ def cluster_statistics(
         include_params=True,
         max_workers=max_workers,
         progress=progress,
+        skip_missing=skip_missing,
     )
