@@ -11,6 +11,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 pytest.importorskip("partdist")
 
 from postpro.backends.astra.models import AstraPhaseSpace, diagnostics_field_names
+from postpro.backends.astra.adapters import (
+    AstraResultAdapter,
+    adapt_result,
+    load_phase_space_result,
+    require_phase_space,
+    unwrap_result,
+)
 
 
 def _write_astra_dump(path: Path, *, n: int = 200, seed: int = 7, n_lost: int = 1) -> None:
@@ -82,3 +89,34 @@ def test_missing_partdist_raises_actionable_error(
     ps = AstraPhaseSpace(tmp_path / "ast.dist")
     with pytest.raises(ImportError, match="partdist"):
         _ = ps.available_keys
+
+
+def test_adapter_exposes_diagnostics_fields(tmp_path: Path) -> None:
+    dump = tmp_path / "ast.dist"
+    _write_astra_dump(dump)
+    adapter = load_phase_space_result(dump)
+
+    assert isinstance(adapter, AstraResultAdapter)
+    assert adapter.has("nemit_x")
+    assert not adapter.has("no_such_field")
+    assert adapter.get("no_such_field", default=-1) == -1
+    assert adapter.get("n_total") == 201
+    assert set(adapter.keys()) == set(diagnostics_field_names())
+
+    described = adapter.describe()
+    assert described["kind"] == "astra"
+    assert described["model_type"] == "AstraPhaseSpace"
+    assert described["path"] == str(dump)
+
+
+def test_adapter_unwrap_and_require(tmp_path: Path) -> None:
+    dump = tmp_path / "ast.dist"
+    _write_astra_dump(dump)
+    model = AstraPhaseSpace(dump)
+    adapter = adapt_result(model)
+
+    assert unwrap_result(adapter) is model
+    assert unwrap_result(model) is model
+    assert require_phase_space(adapter) is model
+    with pytest.raises(TypeError):
+        require_phase_space(object())  # type: ignore[arg-type]
