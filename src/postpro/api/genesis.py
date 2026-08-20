@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
-from tqdm import tqdm
 
+from postpro.api._collect import evaluate_study_rows
 from postpro.backends.genesis.adapters import (
-    GenesisResultAdapter,
     GenesisResultLike,
     require_main_results,
 )
@@ -27,8 +25,7 @@ from postpro.backends.genesis.plot_figures import (
     zoverview,
 )
 from postpro.backends.genesis.scan import load_study
-from postpro.core.metric import MetricRegistry, compute_many
-from postpro.core.study import CaseRecord, Study
+from postpro.core.metric import MetricRegistry
 
 GenesisSource = str | Path | GenesisResultLike
 AxesArray = np.ndarray
@@ -195,7 +192,7 @@ def collect_scan_rows(
         ratios2max=ratios2max,
     )
     names = tuple(metric_names) if metric_names is not None else metric_registry.names()
-    return _evaluate_study(
+    return evaluate_study_rows(
         study,
         names,
         metric_registry,
@@ -265,75 +262,3 @@ def _resolve_metric_registry(
     if registry is not None:
         return registry
     return build_stat_metric_registry(zs=zs, ratios2max=ratios2max)
-
-
-def _evaluate_study(
-    study: Study,
-    names: tuple[str, ...],
-    registry: MetricRegistry,
-    *,
-    include_params: bool,
-    max_workers: int | None,
-    progress: bool,
-    skip_missing: bool = False,
-) -> list[dict[str, object]]:
-    cases = study.cases
-    if not cases:
-        return []
-
-    def work(case: CaseRecord) -> dict[str, object] | None:
-        return _evaluate_case_row(case, names, registry, include_params, skip_missing)
-
-    if max_workers is None or max_workers <= 1:
-        iterator = map(work, cases)
-        if progress:
-            iterator = tqdm(iterator, total=len(cases))
-        rows = list(iterator)
-    else:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            iterator = executor.map(work, cases)
-            if progress:
-                iterator = tqdm(iterator, total=len(cases))
-            rows = list(iterator)
-    return [row for row in rows if row is not None]
-
-
-def _evaluate_case_row(
-    case: CaseRecord,
-    names: tuple[str, ...],
-    registry: MetricRegistry,
-    include_params: bool,
-    skip_missing: bool = False,
-) -> dict[str, object] | None:
-    if skip_missing and case.result is None and case.artifact_path is not None:
-        if not Path(case.artifact_path).exists():
-            return None
-    try:
-        own_result = case.result is None
-        result = case.load_result()
-    except ValueError:
-        return None
-    except FileNotFoundError:
-        if skip_missing:
-            return None
-        raise
-    try:
-        row: dict[str, object] = {"case_id": case.case_id}
-        if include_params:
-            row.update(case.params)
-        row.update(compute_many(result, names, registry))
-        return row
-    finally:
-        if own_result:
-            _close_result(result)
-
-
-def _close_result(result: object) -> None:
-    target = result.source if isinstance(result, GenesisResultAdapter) else result
-    close = getattr(target, "close", None)
-    if not callable(close):
-        return
-    try:
-        close()
-    except Exception:
-        pass
