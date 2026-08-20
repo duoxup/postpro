@@ -18,6 +18,8 @@ from postpro.backends.astra.adapters import (
     require_phase_space,
     unwrap_result,
 )
+from postpro.backends.astra.metric_registry import build_diagnostics_metric_registry
+from postpro.core.metric import compute_many
 
 
 def _write_astra_dump(path: Path, *, n: int = 200, seed: int = 7, n_lost: int = 1) -> None:
@@ -120,3 +122,23 @@ def test_adapter_unwrap_and_require(tmp_path: Path) -> None:
     assert require_phase_space(adapter) is model
     with pytest.raises(TypeError):
         require_phase_space(object())  # type: ignore[arg-type]
+
+
+def test_default_registry_has_one_metric_per_diagnostics_field() -> None:
+    registry = build_diagnostics_metric_registry()
+    assert registry.names() == diagnostics_field_names()
+
+
+def test_registry_fields_subset_and_unknown_field(tmp_path: Path) -> None:
+    dump = tmp_path / "ast.dist"
+    _write_astra_dump(dump)
+    adapter = load_phase_space_result(dump)
+
+    registry = build_diagnostics_metric_registry(fields=["nemit_x", "sig_z"])
+    assert registry.names() == ("nemit_x", "sig_z")
+    values = compute_many(adapter, registry.names(), registry)
+    assert values["nemit_x"] == adapter.get("nemit_x")
+    assert values["sig_z"] == adapter.get("sig_z")
+
+    with pytest.raises(ValueError):
+        build_diagnostics_metric_registry(fields=["nemit_x", "no_such_field"])
