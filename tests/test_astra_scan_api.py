@@ -180,17 +180,17 @@ def test_collect_scan_table_returns_one_row_per_case(tmp_path: Path) -> None:
     assert len(df) == 2
     assert df["case_id"].tolist() == ["0", "1"]
     assert df["param_a"].tolist() == [10, 20]
-    for column in ("n_total", "nemit_x", "sig_E_rel", "I_peak_smooth"):
+    for column in ("stat_n_total", "stat_nemit_x", "stat_sig_E_rel", "stat_I_peak_smooth"):
         assert column in df.columns
-    assert df["n_total"].tolist() == [201, 201]
-    assert (df["nemit_x"] > 0.0).all()
+    assert df["stat_n_total"].tolist() == [201, 201]
+    assert (df["stat_nemit_x"] > 0.0).all()
 
 
 def test_collect_scan_rows_fields_subset(tmp_path: Path) -> None:
     _write_astra_scan_dir(tmp_path, n_cases=1)
     rows = collect_scan_rows(tmp_path, fields=["nemit_x", "sig_z"], include_params=False)
     assert len(rows) == 1
-    assert set(rows[0].keys()) == {"case_id", "nemit_x", "sig_z"}
+    assert set(rows[0].keys()) == {"case_id", "stat_nemit_x", "stat_sig_z"}
 
 
 def test_collect_scan_rows_explicit_registry_wins_over_fields(tmp_path: Path) -> None:
@@ -199,7 +199,7 @@ def test_collect_scan_rows_explicit_registry_wins_over_fields(tmp_path: Path) ->
     rows = collect_scan_rows(
         tmp_path, registry=registry, fields=["nemit_x"], include_params=False
     )
-    assert set(rows[0].keys()) == {"case_id", "n_total"}
+    assert set(rows[0].keys()) == {"case_id", "stat_n_total"}
 
 
 def test_collect_scan_rows_parallel_matches_serial(tmp_path: Path) -> None:
@@ -227,4 +227,4 @@ def test_collect_scan_table_supports_custom_result_relpath(tmp_path: Path) -> No
 
     df = collect_scan_table(tmp_path, result_relpath="outputs/final.dist")
     assert df["case_id"].tolist() == ["1"]
-    assert df["n_total"].tolist() == [201]
+    assert df["stat_n_total"].tolist() == [201]

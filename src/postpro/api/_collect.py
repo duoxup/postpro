@@ -10,6 +10,9 @@ from tqdm import tqdm
 from postpro.core.metric import MetricRegistry, compute_many
 from postpro.core.study import CaseRecord, Study
 
+# Distinguishes computed statistic columns from manifest parameter columns.
+STAT_PREFIX = "stat_"
+
 
 def evaluate_study_rows(
     study: Study,
@@ -65,7 +68,8 @@ def _evaluate_case_row(
         row: dict[str, object] = {"case_id": case.case_id}
         if include_params:
             row.update(case.params)
-        row.update(compute_many(result, names, registry))
+        stats = compute_many(result, names, registry)
+        row.update({f"{STAT_PREFIX}{name}": value for name, value in stats.items()})
         return row
     finally:
         if own_result:

@@ -104,9 +104,13 @@ df = collect_scan_table(
 )
 ```
 
-Column names are the `BeamDiagnosticsResult` field names from `partdist`
-(`nemit_x`, `sig_E_rel`, `I_peak_smooth`, ...). ASTRA functions are not
-re-exported at the top level; import them from `postpro.api.astra`.
+Statistic columns are the `BeamDiagnosticsResult` field names from `partdist`
+prefixed with `stat_` (`stat_nemit_x`, `stat_sig_E_rel`, `stat_I_peak_smooth`,
+...), which separates them from the `case_id` and manifest parameter columns;
+selection via `fields=[...]` / `metric_names=[...]` still uses the unprefixed
+names. The same `stat_` prefix applies to the Genesis `collect_scan_*` tables.
+ASTRA functions are not re-exported at the top level; import them from
+`postpro.api.astra`.
 
 ## Tests
 

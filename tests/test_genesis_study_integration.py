@@ -103,8 +103,8 @@ def test_cluster_statistics_uses_study_and_metric_registry(tmp_path: Path) -> No
     assert len(rows) == 1
     assert rows[0]["case_id"] == "1"
     assert rows[0]["param_a"] == 42
-    assert rows[0]["max_power"] == 11.0
-    assert rows[0]["energy@1.00m"] == 2.2e-6
+    assert rows[0]["stat_max_power"] == 11.0
+    assert rows[0]["stat_energy@1.00m"] == 2.2e-6
 
 
 def test_scan_loading_supports_user_defined_result_relpath(tmp_path: Path) -> None:
@@ -124,4 +124,4 @@ def test_scan_loading_supports_user_defined_result_relpath(tmp_path: Path) -> No
 
     assert records[0].artifact_path == tmp_path / "case001" / "results" / "g4.000.out.h5"
     assert study.cases[0].artifact_path == tmp_path / "case001" / "results" / "g4.000.out.h5"
-    assert rows[0]["max_energy"] == 2.2e-6
+    assert rows[0]["stat_max_energy"] == 2.2e-6
