@@ -19,6 +19,7 @@ from postpro.backends.astra.adapters import (
     unwrap_result,
 )
 from postpro.backends.astra.metric_registry import build_diagnostics_metric_registry
+from postpro.backends.astra.scan import load_case_records, load_study
 from postpro.core.metric import compute_many
 
 
@@ -142,3 +143,30 @@ def test_registry_fields_subset_and_unknown_field(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         build_diagnostics_metric_registry(fields=["nemit_x", "no_such_field"])
+
+
+def _write_astra_scan_dir(cluster_dir: Path, *, n_cases: int = 2) -> None:
+    lines = ["case_id,directory,param_a,param_b"]
+    for idx in range(n_cases):
+        directory = f"case{idx:03d}"
+        lines.append(f"{idx},{directory},{10 * (idx + 1)},{0.1 * (idx + 1):.1f}")
+        _write_astra_dump(cluster_dir / directory / "ast.dist", seed=idx)
+    (cluster_dir / "cases.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_load_case_records_uses_default_relpath(tmp_path: Path) -> None:
+    _write_astra_scan_dir(tmp_path)
+    records = load_case_records(tmp_path)
+    assert [record.case_id for record in records] == ["0", "1"]
+    assert records[0].artifact_path == tmp_path / "case000" / "ast.dist"
+    assert records[1].params == {"param_a": 20, "param_b": 0.2}
+
+
+def test_load_study_evaluates_diagnostics_metrics(tmp_path: Path) -> None:
+    _write_astra_scan_dir(tmp_path)
+    study = load_study(tmp_path)
+    registry = build_diagnostics_metric_registry(fields=["n_total", "nemit_x"])
+    rows = study.evaluate(("n_total", "nemit_x"), registry)
+    assert [row["case_id"] for row in rows] == ["0", "1"]
+    assert all(row["n_total"] == 201 for row in rows)
+    assert all(row["nemit_x"] > 0.0 for row in rows)
