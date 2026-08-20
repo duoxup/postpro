@@ -18,6 +18,7 @@ from postpro.backends.astra.adapters import (
     require_phase_space,
     unwrap_result,
 )
+from postpro.api.astra import collect_scan_rows, collect_scan_table
 from postpro.backends.astra.metric_registry import build_diagnostics_metric_registry
 from postpro.backends.astra.scan import load_case_records, load_study
 from postpro.core.metric import compute_many
@@ -170,3 +171,60 @@ def test_load_study_evaluates_diagnostics_metrics(tmp_path: Path) -> None:
     assert [row["case_id"] for row in rows] == ["0", "1"]
     assert all(row["n_total"] == 201 for row in rows)
     assert all(row["nemit_x"] > 0.0 for row in rows)
+
+
+def test_collect_scan_table_returns_one_row_per_case(tmp_path: Path) -> None:
+    _write_astra_scan_dir(tmp_path)
+    df = collect_scan_table(tmp_path)
+
+    assert len(df) == 2
+    assert df["case_id"].tolist() == ["0", "1"]
+    assert df["param_a"].tolist() == [10, 20]
+    for column in ("n_total", "nemit_x", "sig_E_rel", "I_peak_smooth"):
+        assert column in df.columns
+    assert df["n_total"].tolist() == [201, 201]
+    assert (df["nemit_x"] > 0.0).all()
+
+
+def test_collect_scan_rows_fields_subset(tmp_path: Path) -> None:
+    _write_astra_scan_dir(tmp_path, n_cases=1)
+    rows = collect_scan_rows(tmp_path, fields=["nemit_x", "sig_z"], include_params=False)
+    assert len(rows) == 1
+    assert set(rows[0].keys()) == {"case_id", "nemit_x", "sig_z"}
+
+
+def test_collect_scan_rows_explicit_registry_wins_over_fields(tmp_path: Path) -> None:
+    _write_astra_scan_dir(tmp_path, n_cases=1)
+    registry = build_diagnostics_metric_registry(fields=["n_total"])
+    rows = collect_scan_rows(
+        tmp_path, registry=registry, fields=["nemit_x"], include_params=False
+    )
+    assert set(rows[0].keys()) == {"case_id", "n_total"}
+
+
+def test_collect_scan_rows_parallel_matches_serial(tmp_path: Path) -> None:
+    _write_astra_scan_dir(tmp_path, n_cases=4)
+    serial = collect_scan_rows(tmp_path, fields=["n_total", "nemit_x"])
+    parallel = collect_scan_rows(tmp_path, fields=["n_total", "nemit_x"], max_workers=2)
+    assert parallel == serial
+
+
+def test_collect_scan_rows_missing_dump_raises_or_skips(tmp_path: Path) -> None:
+    _write_astra_scan_dir(tmp_path, n_cases=3)
+    (tmp_path / "case001" / "ast.dist").unlink()
+
+    with pytest.raises(FileNotFoundError):
+        collect_scan_rows(tmp_path, fields=["n_total"])
+
+    rows = collect_scan_rows(tmp_path, fields=["n_total"], skip_missing=True)
+    assert [row["case_id"] for row in rows] == ["0", "2"]
+
+
+def test_collect_scan_table_supports_custom_result_relpath(tmp_path: Path) -> None:
+    lines = ["case_id,directory,param_a", "1,case001,42"]
+    _write_astra_dump(tmp_path / "case001" / "outputs" / "final.dist")
+    (tmp_path / "cases.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    df = collect_scan_table(tmp_path, result_relpath="outputs/final.dist")
+    assert df["case_id"].tolist() == ["1"]
+    assert df["n_total"].tolist() == [201]
