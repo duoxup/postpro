@@ -5,6 +5,8 @@
 Current status:
 - the package root has been rebuilt around `src/postpro`
 - the only backend under active development is `postpro.backends.genesis`
+- an ASTRA backend collects phase-space dump diagnostics into scan tables
+  (requires the optional `partdist` package)
 - the `MainResults` path is the most complete and currently supports:
   - HDF5 result loading
   - study/metric integration
@@ -24,6 +26,13 @@ Core dependencies are declared in `pyproject.toml`.
 Single-case plotting can use `paramstudy` metadata and autoscaling when that
 package is importable. `postpro` does not currently declare it as a hard
 dependency, because it lives in a separate repository during this refactor.
+
+## Optional `partdist`
+
+The ASTRA backend reads phase-space dump files and computes beam diagnostics
+through the `partdist` package. `postpro` does not declare it as a hard
+dependency, because it lives in a separate repository during this refactor.
+Genesis functionality works without it.
 
 ## Current Genesis user API
 
@@ -73,6 +82,31 @@ import postpro
 
 postpro.render_zoverview("g4.000.out.h5", save_to="z_overview.png")
 ```
+
+## Current ASTRA user API
+
+ASTRA scan collection reads one phase-space dump per case (default
+case-relative path `ast.dist`) and computes one row of beam diagnostics per
+case via `partdist.compute_beam_diagnostics`:
+
+```python
+from postpro.api.astra import collect_scan_table
+
+df = collect_scan_table("path/to/scan")
+
+# subset of diagnostics fields, custom dump location, parallel evaluation
+df = collect_scan_table(
+    "path/to/scan",
+    result_relpath="outputs/final.dist",
+    fields=["nemit_x", "nemit_y", "sig_z", "sig_E_rel"],
+    max_workers=8,
+    skip_missing=True,
+)
+```
+
+Column names are the `BeamDiagnosticsResult` field names from `partdist`
+(`nemit_x`, `sig_E_rel`, `I_peak_smooth`, ...). ASTRA functions are not
+re-exported at the top level; import them from `postpro.api.astra`.
 
 ## Tests
 

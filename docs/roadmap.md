@@ -88,6 +88,12 @@
 - 已实现 `collect_scan_table(...)`
 - 当前输出格式是适合 `paramstudy` 的一行一个 case 结果表
 
+11. ASTRA backend 起步
+- 已实现 `postpro.backends.astra`（模型 / adapter / metric registry / scan）
+- 已实现 `postpro.api.astra.collect_scan_rows / collect_scan_table`
+- 统计量来自 `partdist.compute_beam_diagnostics`（软依赖）
+- scan manifest 与并行评估逻辑已提升为 genesis / astra 共享层
+
 ### 当前状态
 
 当前仓库已经完成“地基阶段”的大部分工作。  
