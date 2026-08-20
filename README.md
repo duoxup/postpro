@@ -4,7 +4,7 @@
 
 Current status:
 - the package root has been rebuilt around `src/postpro`
-- the only backend under active development is `postpro.backends.genesis`
+- the primary backend is `postpro.backends.genesis`
 - an ASTRA backend collects phase-space dump diagnostics into scan tables
   (requires the optional `partdist` package)
 - the `MainResults` path is the most complete and currently supports:
